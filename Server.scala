@@ -14,6 +14,8 @@ object Server {
     val out = new ObjectOutputStream(client.getOutputStream)
 
     def run {
+      println("client connected")
+
       // send client a list of file names and hashes
       val listMsg = FileListMessage(hashes.toList)
       out.writeObject(listMsg)
@@ -61,20 +63,26 @@ object Server {
     val hasher = MessageDigest.getInstance(hash_algo)
 
     // generate file list and hashes
+    print("hashing files... ")
     val filenames = home.list
     filenames.foreach { filename =>
       val file = new File(filename)
-      val fileIn = new FileInputStream(file)
-      val bytes = new Array[Byte](file.length.toInt)
-      fileIn.read(bytes)
 
-      val hash = hasher.digest(bytes)
-      hashes.update(filename, hash)
+      if (file.isFile) {
+        val fileIn = new FileInputStream(file)
+        val bytes = new Array[Byte](file.length.toInt)
+        fileIn.read(bytes)
+
+        val hash = hasher.digest(bytes)
+        hashes.update(filename, hash)
+      }
     }
+    println("done")
 
     val serv = new ServerSocket(port)
 
     // main listen loop
+    println("listening for connections")
     while (true) {
       val client = serv.accept
       val handler = new Thread(new ClientHandler(client))

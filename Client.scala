@@ -32,8 +32,10 @@ object Client {
     // }
 
     val serv = new Socket(host, port.toInt)
-    val in = new ObjectInputStream(serv.getInputStream)
     val out = new ObjectOutputStream(serv.getOutputStream)
+    val in = new ObjectInputStream(serv.getInputStream)
+
+    println("connected to server")
 
     // get list of files and hashes from server
     in.readObject match {
