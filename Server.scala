@@ -13,7 +13,7 @@ object Server {
     val in = new ObjectInputStream(client.getInputStream)
     val out = new ObjectOutputStream(client.getOutputStream)
 
-    def run {
+    def run : Unit = {
       println("client connected")
 
       // send client a list of file names and hashes
@@ -57,26 +57,37 @@ object Server {
   val hash_algo = "SHA-512"
 
   /* Takes a home folder and a binding port */
-  def main (args: Array[String]) {
+  def main (args: Array[String]) : Unit = {
     val home = new File(args(0))
     val port = args(1).toInt
     val hasher = MessageDigest.getInstance(hash_algo)
 
+    // recursively iterate over a list of files and directories and hash them
+    def hashFiles (filenames: Array[String]) : Unit = {
+      filenames.foreach { filename =>
+        val file = new File(filename)
+
+        if (file.isFile) {
+          // hash file
+          val fileIn = new FileInputStream(file)
+          val bytes = new Array[Byte](file.length.toInt)
+          fileIn.read(bytes)
+
+          val hash = hasher.digest(bytes)
+          hashes.update(filename, hash)
+        }
+        else {
+          // recurse on directory
+          val dirNames = file.list
+          hashFiles(dirNames.map(file.getPath + File.separator + _))
+        }
+      }
+    }
+
     // generate file list and hashes
     print("hashing files... ")
     val filenames = home.list
-    filenames.foreach { filename =>
-      val file = new File(filename)
-
-      if (file.isFile) {
-        val fileIn = new FileInputStream(file)
-        val bytes = new Array[Byte](file.length.toInt)
-        fileIn.read(bytes)
-
-        val hash = hasher.digest(bytes)
-        hashes.update(filename, hash)
-      }
-    }
+    hashFiles(filenames)
     println("done")
 
     val serv = new ServerSocket(port)

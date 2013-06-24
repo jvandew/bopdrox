@@ -13,7 +13,7 @@ object Client {
   val hash_algo = "SHA-512"
 
   /* Takes a home folder, a binding port, and the address of a running Server */
-  def main (args: Array[String]) {
+  def main (args: Array[String]) : Unit = {
     val home = new File(args(0))
     val localport = args(1).toInt
     val Array(host, port) = args(2).split(':')
@@ -47,13 +47,28 @@ object Client {
         in.readObject match {
           case FileMessage(files) => {
             files.foreach { name_data =>
-              val fileOut = new FileOutputStream(name_data._1)
+              val path = home + File.separator + name_data._1
+
+              // check if we must create a directory
+              name_data._1.lastIndexOf(File.separatorChar) match {
+                case -1 => ()   // file; nothing to do here
+                case split => {
+                  // directory; create it if necessary
+                  val dirPath = path.substring(0, split)
+                  val dir = new File(dirPath)
+                  if (!dir.exists)
+                    dir.mkdirs
+                }
+              }
+
+              val fileOut = new FileOutputStream(path)
               fileOut.write(name_data._2)
               fileOut.close
 
               val hash = hasher.digest(name_data._2)
               hashes.update(name_data._1, hash)
             }
+
             out.writeObject(Ack)
           }
           case _ => throw new IOException("Unknown or incorrect message received")
