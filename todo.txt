@@ -1,0 +1,5 @@
+- implement timestamp checking on a client's files upon connection to the server
+- implement version vectors for already-connected clients
+- main loop: check for new files as well as timestamps
+- when updating metadata record last modified before hashing to avoid race conditions
+- avoid subtle bugs

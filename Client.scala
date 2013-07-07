@@ -19,17 +19,33 @@ object Client {
     val Array(host, port) = args(2).split(':')
     val hasher = MessageDigest.getInstance(hash_algo)
 
-    // // generate file list and hashes
-    // val filenames = home.list
-    // filenames.foreach { filename =>
-    //   val file = new File(filename)
-    //   val fileIn = new FileInputStream(file)
-    //   val bytes = new Array[Byte](file.length.toInt)
-    //   fileIn.read(bytes)
+    // recursively iterate over a list of files and directories and hash them
+    def hashFiles (filenames: Array[String]) : Unit = {
+      filenames.foreach { filename =>
+        val file = new File(filename)
 
-    //   val hash = hasher.digest(bytes)
-    //   hashes.update(filename, hash)
-    // }
+        if (file.isFile) {
+          // hash file
+          val fileIn = new FileInputStream(file)
+          val bytes = new Array[Byte](file.length.toInt)
+          fileIn.read(bytes)
+
+          val hash = hasher.digest(bytes)
+          hashes.update(filename, hash)
+        }
+        else {
+          // recurse on directory
+          val dirNames = file.list
+          hashFiles(dirNames.map(file.getPath + File.separator + _))
+        }
+      }
+    }
+
+    // generate file list and hashes
+    print("hashing files... ")
+    val filenames = home.list
+    hashFiles(filenames)
+    println("done")
 
     val serv = new Socket(host, port.toInt)
     val out = new ObjectOutputStream(serv.getOutputStream)
