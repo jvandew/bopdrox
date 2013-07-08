@@ -1,5 +1,10 @@
+- implement file update/creation/deletion checking using inotify in a separate branch
+  (see sun.nio.fs.LinuxWatchService for an example)
+- implement file update/creation/deletion checking using java.nio.file in java 7 in a
+  separate branch
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
-- main loop: check for new files as well as timestamps
+- fix cross-platform issues with storing file pathnames
+- implement fault tolerance for incorrect wire transfers
 - when updating metadata record last modified before hashing to avoid race conditions
 - avoid subtle bugs

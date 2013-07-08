@@ -8,7 +8,7 @@ object Client {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, Array[Byte]]
+  val hashes = new HashMap[String, (Long, Array[Byte])]
 
   val hash_algo = "SHA-512"
 
@@ -19,32 +19,60 @@ object Client {
     val Array(host, port) = args(2).split(':')
     val hasher = MessageDigest.getInstance(hash_algo)
 
-    // recursively iterate over a list of files and directories and hash them
-    def hashFiles (filenames: Array[String]) : Unit = {
-      filenames.foreach { filename =>
-        val file = new File(filename)
+    // get the contents of a file and its hash value in that order
+    def contentsAndHash (file: File) : (Array[Byte], Array[Byte]) = {
+      val fileIn = new FileInputStream(file)
+      val bytes = new Array[Byte](file.length.toInt)
+      fileIn.read(bytes)
 
-        if (file.isFile) {
-          // hash file
-          val fileIn = new FileInputStream(file)
-          val bytes = new Array[Byte](file.length.toInt)
-          fileIn.read(bytes)
+      (bytes, hasher.digest(bytes))
+    }
 
-          val hash = hasher.digest(bytes)
-          hashes.update(filename, hash)
-        }
-        else {
-          // recurse on directory
-          val dirNames = file.list
-          hashFiles(dirNames.map(file.getPath + File.separator + _))
+    // recursively walk a directory tree and apply the given function to each file
+    // calling this function on a file is an error
+    def dirForeach (dir: File) (proc: File => Unit) : Unit = {
+      Option(dir.listFiles) match {
+        case None =>
+          throw new IOException("Error while processing directory")
+        case Some(files) => {
+          files.foreach { file =>
+            if (file.isFile)
+              proc(file)
+            else
+              dirForeach(file)(proc)
+          }
+      }
+    }
+
+    // ensure that the directory containing the given file path exists
+    // and create it if not
+    def ensureDir (path: String) : Unit = {
+      path.lastIndexOf(File.separatorChar) match {
+        case -1 => ()   // file; nothing to do here
+        case split => {
+          // directory; create it if necessary
+          val dir = new File(path.substring(0, split))
+          if (!dir.exists)
+            dir.mkdirs
         }
       }
     }
 
+    // helper function to generate a relative path for a file
+    def getRelativePath (file: File) : String =
+      file.getCanonicalPath.stripPrefix(home.getCanonicalPath)
+
+    // helper function to hash the contents of a file
+    def hashFile (file: File) : Array[Byte] = contentsAndHash(file)._2
+
     // generate file list and hashes
     print("hashing files... ")
-    val filenames = home.list
-    hashFiles(filenames)
+
+    dirForeach(home) { file =>
+      val hash = hashFile(file)
+      hashes.update(getRelativePath(file), (file.lastModified, hash))
+    }
+
     println("done")
 
     val serv = new Socket(host, port.toInt)
@@ -56,31 +84,25 @@ object Client {
     // get list of files and hashes from server
     in.readObject match {
       case FileListMessage(fileList) => {
+
+        // TODO(jacob) eventually this should only request new/modified files
         val files = fileList.map(_._1)
         val msg = FileRequest(files)
         out.writeObject(msg)
 
         in.readObject match {
           case FileMessage(files) => {
+
+            // Process list of new files
             files.foreach { name_data =>
               val path = home + File.separator + name_data._1
-
-              // check if we must create a directory
-              name_data._1.lastIndexOf(File.separatorChar) match {
-                case -1 => ()   // file; nothing to do here
-                case split => {
-                  // directory; create it if necessary
-                  val dirPath = path.substring(0, split)
-                  val dir = new File(dirPath)
-                  if (!dir.exists)
-                    dir.mkdirs
-                }
-              }
+              ensureDir(name_data._1)
 
               val fileOut = new FileOutputStream(path)
               fileOut.write(name_data._2)
               fileOut.close
 
+              // TODO(jacob) check hash value matches
               val hash = hasher.digest(name_data._2)
               hashes.update(name_data._1, hash)
             }
@@ -95,8 +117,28 @@ object Client {
 
     // main loop to check for updated files
     while (true) {
-      println("Hey good lookin")
-      Thread.sleep(10 * 1000)
+      var updates = Nil
+
+      dirForeach(home) { file =>
+        val path = getRelativePath(file)
+
+        if !(hashes.contains(path) && hashes(path)._1 == file.lastModified) {
+          val (bytes, hash) = contentsAndHash(file)
+          updates = (path, bytes, hash)::updates
+        }
+      }
+
+      updates match {
+        case Nil => ()  // no updates
+        case _ => {
+          val msg = new FileMessage(updates)
+          out.writeObject(msg)
+
+          // TODO(jacob) currently we don't make sure the message is received...
+        }
+      }
+
+      Thread.sleep(1000)
     }
 
   }

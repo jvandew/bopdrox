@@ -23,6 +23,7 @@ object Server {
       in.readObject match {
         case Ack => println("Client up to date")
         case FileRequest(files) => {
+
           val fileList =
             files.map { filename =>
               val file = new File(filename)
@@ -30,7 +31,7 @@ object Server {
               val bytes = new Array[Byte](file.length.toInt)
               fileIn.read(bytes)
 
-              (filename, bytes)
+              (filename, bytes, hashes(filename))
             }
           val msg = FileMessage(fileList)
           out.writeObject(msg)
