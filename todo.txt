@@ -8,4 +8,6 @@
 - implement fault tolerance for incorrect wire transfers
 - when updating metadata record last modified before hashing to avoid race conditions
 - implement multiple clients
+- separate utilities into separate class
+- create class to represent hashmap datatype
 - avoid subtle bugs
