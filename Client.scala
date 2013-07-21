@@ -6,7 +6,7 @@ object Client {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, (Long, Array[Byte])]
+  val hashes = new HashMap[String, MapData]
 
   /* Takes a home folder, a binding port, and the address of a running Server */
   def main (args: Array[String]) : Unit = {
@@ -21,7 +21,7 @@ object Client {
 
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), (file.lastModified, hash))
+      hashes.update(getRelPath(file), MapData(file.lastModified, hash))
     }
 
     println("done")
@@ -54,7 +54,7 @@ object Client {
 
               // TODO(jacob) check hash value matches
               val hash = Utils.hashBytes(name_data._2)
-              hashes.update(name_data._1, (file.lastModified, hash))
+              hashes.update(name_data._1, MapData(file.lastModified, hash))
             }
 
             out.writeObject(Ack)
@@ -72,7 +72,7 @@ object Client {
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)
 
-        if (!hashes.contains(path) || hashes(path)._1 != file.lastModified) {
+        if (!hashes.contains(path) || hashes(path).time != file.lastModified) {
           val (bytes, hash) = Utils.contentsAndHash(file)
           updates = (path, bytes, hash)::updates
         }

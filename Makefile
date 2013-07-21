@@ -1,2 +1,2 @@
-default: Ack.scala Client.scala ClientHandler.scala FileListMessage.scala FileMessage.scala FileRequest.scala Server.scala Utils.scala
-	scalac -deprecation Ack.scala FileListMessage.scala FileMessage.scala FileRequest.scala Utils.scala ClientHandler.scala Server.scala Client.scala
+default: Ack.scala Client.scala ClientHandler.scala FileListMessage.scala FileMessage.scala FileRequest.scala MapData.scala Server.scala Utils.scala
+	scalac -deprecation MapData.scala Ack.scala FileListMessage.scala FileMessage.scala FileRequest.scala Utils.scala ClientHandler.scala Server.scala Client.scala

@@ -6,7 +6,7 @@ object Server {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, (Long, Array[Byte])]
+  val hashes = new HashMap[String, MapData]
 
   /* Takes a home folder and a binding port */
   def main (args: Array[String]) : Unit = {
@@ -20,7 +20,7 @@ object Server {
 
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), (file.lastModified, hash))
+      hashes.update(getRelPath(file), MapData(file.lastModified, hash))
     }
 
     println("done")
