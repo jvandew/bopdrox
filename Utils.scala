@@ -52,7 +52,7 @@ object Utils {
 
   // find the relative path for a file
   def getRelativePath (home: File) (file: File) : String =
-    file.getCanonicalPath.stripPrefix(home.getCanonicalPath)
+    file.getCanonicalPath.stripPrefix(home.getCanonicalPath + File.separator)
 
   // wrapper around hasher.digest(bytes)
   def hashBytes (bytes: Array[Byte]) : Array[Byte] = hasher.digest(bytes)

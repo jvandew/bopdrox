@@ -4,7 +4,7 @@ import scala.collection.mutable.HashMap
 
 /* A ClientHandler is a Runnable object designed to handle all communications
  * with a Client */
-class ClientHandler (client: Socket) (val hashes: HashMap[String, MapData]) extends Runnable {
+class ClientHandler (client: Socket) (val home: File) (val hashes: HashMap[String, MapData]) extends Runnable {
 
   val in = new ObjectInputStream(client.getInputStream)
   val out = new ObjectOutputStream(client.getOutputStream)
@@ -22,7 +22,7 @@ class ClientHandler (client: Socket) (val hashes: HashMap[String, MapData]) exte
 
         val fileList =
           files.map { filename =>
-            val contents = Utils.readFile(new File(filename))
+            val contents = Utils.readFile(new File(home, filename))
             (filename, contents, hashes(filename).hash)
           }
         val msg = FileMessage(fileList)
@@ -42,12 +42,23 @@ class ClientHandler (client: Socket) (val hashes: HashMap[String, MapData]) exte
         case FileMessage(updates) => {
 
           updates.foreach { pbh =>
-            Utils.ensureDir(pbh._1)
-            val file = new File(pbh._1)
+            val path = home + File.separator + pbh._1
+            Utils.ensureDir(path)
+
+            val file = new File(path)
             Utils.writeFile(file)(pbh._2)
             // TODO(jacob) this is not safe with multiple clients
             // TODO(jacob) verify correct hash
             hashes.update(pbh._1, MapData(file.lastModified, pbh._3))
+          }
+        }
+
+        case RemovedMessage(fileSet) => {
+
+          fileSet.foreach { filename =>
+            hashes.remove(filename)
+            val file = new File(home + File.separator + filename)
+            file.delete
           }
         }
 

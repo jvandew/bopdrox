@@ -47,7 +47,7 @@ object Client {
             // Process list of new files
             files.foreach { name_data =>
               val path = home + File.separator + name_data._1
-              Utils.ensureDir(name_data._1)
+              Utils.ensureDir(path)
 
               val file = new File(path)
               Utils.writeFile(file)(name_data._2)
@@ -67,26 +67,42 @@ object Client {
 
     // main loop to check for updated files
     while (true) {
+      var keySet = hashes.keySet
       var updates = List[(String, Array[Byte], Array[Byte])]()
 
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)
 
-        if (!hashes.contains(path) || hashes(path).time != file.lastModified) {
+        if (!hashes.contains(path)) {
+          val (bytes, hash) = Utils.contentsAndHash(file)
+          updates = (path, bytes, hash)::updates
+          hashes.update(path, MapData(file.lastModified, hash))
+        }
+        else if (hashes(path).time != file.lastModified) {
           val (bytes, hash) = Utils.contentsAndHash(file)
           updates = (path, bytes, hash)::updates
         }
+        else
+          keySet = keySet - path
       }
+
+      // remove any deleted files from our hashmap
+      keySet.foreach(key => hashes.remove(key))
 
       updates match {
         case Nil => ()  // no updates
         case _ => {
-          val msg = new FileMessage(updates)
+          val msg = FileMessage(updates)
           out.writeObject(msg)
-
-          // TODO(jacob) currently we don't make sure the message is received...
         }
       }
+
+      if (!keySet.isEmpty) {
+        val msg = RemovedMessage(keySet)
+        out.writeObject(msg)
+      }
+
+      // TODO(jacob) currently we don't make sure messages are received...
 
       Thread.sleep(1000)
     }

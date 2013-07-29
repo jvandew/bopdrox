@@ -8,5 +8,6 @@
 - implement fault tolerance for incorrect wire transfers
 - when updating metadata record last modified before hashing to avoid race conditions
 - implement multiple clients
-- create class to represent hashmap datatype
+- gracefully handle errors and disconnects
+- we don't currently sync empty folders. it's undecided if this is a bug or not. probably
 - avoid subtle bugs

@@ -31,7 +31,7 @@ object Server {
     println("listening for connections")
     while (true) {
       val client = serv.accept
-      val handler = new Thread(new ClientHandler(client)(hashes))
+      val handler = new Thread(new ClientHandler(client)(home)(hashes))
       handler.start
     }
 
