@@ -8,6 +8,9 @@ object Server {
   // TODO(jacob) include version vectors at some point
   val hashes = new HashMap[String, MapData]
 
+  // store a list of all connected clients
+  var clients = List[ClientHandler]()
+
   /* Takes a home folder and a binding port */
   def main (args: Array[String]) : Unit = {
     val home = new File(args(0))
@@ -31,7 +34,7 @@ object Server {
     println("listening for connections")
     while (true) {
       val client = serv.accept
-      val handler = new Thread(new ClientHandler(client)(home)(hashes))
+      val handler = new Thread(new ClientHandler(client)(home))
       handler.start
     }
 
