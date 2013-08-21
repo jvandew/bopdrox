@@ -65,6 +65,9 @@ object Client {
       case _ => throw new IOException("Unknown or incorrect message received")
     }
 
+    // begin listener thread
+    new Thread(new ClientListener(in)(home)).start
+
     // main loop to check for updated files
     while (true) {
       var keySet = hashes.keySet
@@ -87,7 +90,12 @@ object Client {
       }
 
       // remove any deleted files from our hashmap
-      keySet.foreach(key => hashes.remove(key))
+      keySet = keySet.filter { key =>
+        hashes.remove(key) match {
+          case None => false
+          case Some(_) => true
+        }
+      }
 
       updates match {
         case Nil => ()  // no updates
