@@ -75,18 +75,13 @@ object Client {
 
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)
+        keySet = keySet - path
 
-        if (!hashes.contains(path)) {
+        if (!hashes.contains(path) || hashes(path).time != file.lastModified) {
           val (bytes, hash) = Utils.contentsAndHash(file)
-          updates = (path, bytes, hash)::updates
           hashes.update(path, MapData(file.lastModified, hash))
-        }
-        else if (hashes(path).time != file.lastModified) {
-          val (bytes, hash) = Utils.contentsAndHash(file)
           updates = (path, bytes, hash)::updates
         }
-        else
-          keySet = keySet - path
       }
 
       // remove any deleted files from our hashmap
@@ -100,14 +95,18 @@ object Client {
       updates match {
         case Nil => ()  // no updates
         case _ => {
+          print("update(s) detected. notifying Server... ")
           val msg = FileMessage(updates)
           out.writeObject(msg)
+          println("done")
         }
       }
 
       if (!keySet.isEmpty) {
+        print("removed files detected. notifying Server... ")
         val msg = RemovedMessage(keySet)
         out.writeObject(msg)
+        println("done")
       }
 
       // TODO(jacob) currently we don't make sure messages are received...

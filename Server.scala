@@ -34,8 +34,9 @@ object Server {
     println("listening for connections")
     while (true) {
       val client = serv.accept
-      val handler = new Thread(new ClientHandler(client)(home))
-      handler.start
+      val handler = new ClientHandler(client)(home)
+      clients = handler::clients
+      new Thread(handler).start
     }
 
   }

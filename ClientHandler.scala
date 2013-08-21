@@ -12,6 +12,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
   private def matchMessage (msg: Message) : Unit = {
     msg match {
       case FileMessage(fileContents) => {
+        print("handling FileMessage... ")
 
         fileContents.foreach { pbh =>
           val path = home + File.separator + pbh._1
@@ -23,15 +24,20 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
           // TODO(jacob) verify correct hash
           Server.hashes.update(pbh._1, MapData(file.lastModified, pbh._3))
         }
+
+        println("done")
       }
 
       case RemovedMessage(fileSet) => {
+        print("handling RemovedMessage... ")
 
         fileSet.foreach { filename =>
           Server.hashes.remove(filename)
           val file = new File(home + File.separator + filename)
           file.delete
         }
+
+        println("done")
       }
     }
   }

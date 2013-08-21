@@ -4,6 +4,7 @@
   separate branch
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
+- implement encryption
 - fix cross-platform issues with storing file pathnames
 - implement fault tolerance for incorrect wire transfers
 - when updating metadata record last modified before hashing to avoid race conditions
