@@ -6,7 +6,7 @@ object Client {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, MapData]
+  val hashes = new HashMap[String, Option[MapData]]
 
   /* Takes a home folder, a binding port, and the address of a running Server */
   def main (args: Array[String]) : Unit = {
@@ -21,8 +21,9 @@ object Client {
 
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), MapData(file.lastModified, hash))
+      hashes.update(getRelPath(file), Some(MapData(file.lastModified, hash)))
     }
+    { dir => hashes.update(getRelPath(dir), None)}
 
     println("done")
 
@@ -42,19 +43,26 @@ object Client {
         out.writeObject(msg)
 
         in.readObject match {
-          case FileMessage(files) => {
+          case FileMessage(fileContents) => {
 
             // Process list of new files
-            files.foreach { name_data =>
-              val path = home + File.separator + name_data._1
-              Utils.ensureDir(path)
-
-              val file = new File(path)
-              Utils.writeFile(file)(name_data._2)
-
-              // TODO(jacob) check hash value matches
-              val hash = Utils.hashBytes(name_data._2)
-              hashes.update(name_data._1, MapData(file.lastModified, hash))
+            // TODO(jacob) also mostly copy-pasted
+            fileContents.foreach {
+              _ match {
+                // empty directory
+                case (subpath, None) => {
+                  val emptyDir = new File(home, subpath)
+                  emptyDir.mkdirs
+                  hashes.update(subpath, None)
+                }
+                // normal file
+                case (subpath, Some((bytes, hash))) => {
+                  Utils.ensureDir(home, subpath)
+                  val file = new File(home, subpath)
+                  Utils.writeFile(file)(bytes)
+                  hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+                }
+              }
             }
 
             out.writeObject(Ack)
@@ -71,16 +79,50 @@ object Client {
     // main loop to check for updated files
     while (true) {
       var keySet = hashes.keySet
-      var updates = List[(String, Array[Byte], Array[Byte])]()
+      var updates = List[(String, Option[(Array[Byte], Array[Byte])])]()
 
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)
         keySet = keySet - path
 
-        if (!hashes.contains(path) || hashes(path).time != file.lastModified) {
+        val update = {
+          if (!hashes.contains(path))
+            true
+          else
+            hashes(path) match {
+              case None => true   // formerly an empty directory
+              case Some(fileData) =>
+                if (fileData.time != file.lastModified)
+                  true
+                else
+                  false
+            }
+        }
+
+        if (update) {
           val (bytes, hash) = Utils.contentsAndHash(file)
-          hashes.update(path, MapData(file.lastModified, hash))
-          updates = (path, bytes, hash)::updates
+          hashes.update(path, Some(MapData(file.lastModified, hash)))
+          updates = (path, Some(bytes, hash))::updates
+        }
+
+      }
+      { dir =>
+        val path = getRelPath(dir)
+        keySet = keySet - path
+
+        val update = {
+          if (!hashes.contains(path))
+            true
+          else
+            hashes(path) match {
+              case None => false
+              case Some(fileData) => true   // formerly a file
+            }
+        }
+
+        if (update) {
+          hashes.update(path, None)
+          updates = (path, None)::updates
         }
       }
 

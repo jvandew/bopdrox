@@ -20,21 +20,26 @@ object Utils {
 
   // recursively walk a directory tree and apply the given function to each file
   // calling this function on a file is an error
-  def dirForeach (dir: File) (proc: File => Unit) : Unit = {
+  def dirForeach (dir: File) (proc: File => Unit) (empty: File => Unit) : Unit = {
     Option(dir.listFiles) match {
       case None =>
         throw new IOException("Error while processing directory")
       
+      case Some(Array()) => empty(dir)
+
       case Some(files) => {
         files.foreach { file =>
           if (file.isFile)
             proc(file)
           else
-            dirForeach(file)(proc)
+            dirForeach(file)(proc)(empty)
         }
       }
     }
   }
+
+  def ensureDir (home: File, subpath: String) : Unit =
+    ensureDir(home + File.separator + subpath)
 
   // ensure that the directory containing the given file path exists
   // and create it if not

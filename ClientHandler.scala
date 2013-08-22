@@ -14,15 +14,22 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
       case FileMessage(fileContents) => {
         print("handling FileMessage... ")
 
-        fileContents.foreach { pbh =>
-          val path = home + File.separator + pbh._1
-          Utils.ensureDir(path)
-
-          val file = new File(path)
-          Utils.writeFile(file)(pbh._2)
-          // TODO(jacob) this is not safe with multiple clients
-          // TODO(jacob) verify correct hash
-          Server.hashes.update(pbh._1, MapData(file.lastModified, pbh._3))
+        fileContents.foreach {
+          _ match {
+            // empty directory
+            case (subpath, None) => {
+              val emptyDir = new File(home, subpath)
+              emptyDir.mkdirs
+              Server.hashes.update(subpath, None)
+            }
+            // normal file
+            case (subpath, Some((bytes, hash))) => {
+              Utils.ensureDir(home, subpath)
+              val file = new File(home, subpath)
+              Utils.writeFile(file)(bytes)
+              Server.hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+            }
+          }
         }
 
         println("done")
@@ -33,7 +40,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
 
         fileSet.foreach { filename =>
           Server.hashes.remove(filename)
-          val file = new File(home + File.separator + filename)
+          val file = new File(home, filename)
           file.delete
         }
 
@@ -48,18 +55,29 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
     println("client connected")
 
     // send client a list of file names and hashes
-    val fhList = Server.hashes.toList.map(kv => (kv._1, kv._2.hash))
+    val fhList = Server.hashes.toList.map {
+      _ match {
+        case (subpath, None) => (subpath, None)
+        case (subpath, Some(fileData)) => (subpath, Some(fileData.hash))
+      }
+    }
+
     val listMsg = FileListMessage(fhList)
     out.writeObject(listMsg)
 
     in.readObject match {
       case FileRequest(files) => {
 
-        val fileList =
-          files.map { filename =>
-            val contents = Utils.readFile(new File(home, filename))
-            (filename, contents, Server.hashes(filename).hash)
+        val fileList = files.map { filename =>
+          Server.hashes(filename) match {
+            case None => (filename, None)
+            case Some(fileData) => {
+              val contents = Utils.readFile(new File(home, filename))
+              (filename, Some(contents, fileData.hash))
+            }
           }
+        }
+
         val msg = FileMessage(fileList)
         out.writeObject(msg)
 

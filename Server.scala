@@ -6,7 +6,7 @@ object Server {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, MapData]
+  val hashes = new HashMap[String, Option[MapData]]
 
   // store a list of all connected clients
   var clients = List[ClientHandler]()
@@ -23,8 +23,9 @@ object Server {
 
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), MapData(file.lastModified, hash))
+      hashes.update(getRelPath(file), Some(MapData(file.lastModified, hash)))
     }
+    { dir => hashes.update(getRelPath(dir), None)}
 
     println("done")
 

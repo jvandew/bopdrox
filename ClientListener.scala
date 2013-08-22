@@ -11,15 +11,23 @@ class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
         case FileMessage(fileContents) => {
           print("handling FileMessage... ")
 
-          fileContents.foreach { pbh =>
-            val path = home + File.separator + pbh._1
-            Utils.ensureDir(path)
-
-            val file = new File(path)
-            Utils.writeFile(file)(pbh._2)
-            // TODO(jacob) this is not safe with multiple clients
-            // TODO(jacob) verify correct hash
-            Client.hashes.update(pbh._1, MapData(file.lastModified, pbh._3))
+          // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
+          fileContents.foreach {
+            _ match {
+              // empty directory
+              case (subpath, None) => {
+                val emptyDir = new File(home, subpath)
+                emptyDir.mkdirs
+                Client.hashes.update(subpath, None)
+              }
+              // normal file
+              case (subpath, Some((bytes, hash))) => {
+                Utils.ensureDir(home, subpath)
+                val file = new File(home, subpath)
+                Utils.writeFile(file)(bytes)
+                Client.hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+              }
+            }
           }
 
           println("done")
@@ -30,7 +38,7 @@ class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
 
           fileSet.foreach { filename =>
             Client.hashes.remove(filename)
-            val file = new File(home + File.separator + filename)
+            val file = new File(home, filename)
             file.delete
           }
 
