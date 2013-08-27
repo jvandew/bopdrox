@@ -16,14 +16,14 @@ class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
             _ match {
               // empty directory
               case (subpath, None) => {
-                val emptyDir = new File(home, subpath)
+                val emptyDir = Utils.newFile(home, subpath)
                 emptyDir.mkdirs
                 Client.hashes.update(subpath, None)
               }
               // normal file
               case (subpath, Some((bytes, hash))) => {
                 Utils.ensureDir(home, subpath)
-                val file = new File(home, subpath)
+                val file = Utils.newFile(home, subpath)
                 Utils.writeFile(file)(bytes)
                 Client.hashes.update(subpath, Some(MapData(file.lastModified, hash)))
               }
@@ -38,7 +38,7 @@ class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
 
           fileSet.foreach { filename =>
             Client.hashes.remove(filename)
-            val file = new File(home, filename)
+            val file = Utils.newFile(home, filename)
             file.delete
           }
 

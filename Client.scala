@@ -6,7 +6,7 @@ object Client {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, Option[MapData]]
+  val hashes = new HashMap[List[String], Option[MapData]]
 
   /* Takes a home folder, a binding port, and the address of a running Server */
   def main (args: Array[String]) : Unit = {
@@ -51,14 +51,14 @@ object Client {
               _ match {
                 // empty directory
                 case (subpath, None) => {
-                  val emptyDir = new File(home, subpath)
+                  val emptyDir = Utils.newFile(home, subpath)
                   emptyDir.mkdirs
                   hashes.update(subpath, None)
                 }
                 // normal file
                 case (subpath, Some((bytes, hash))) => {
                   Utils.ensureDir(home, subpath)
-                  val file = new File(home, subpath)
+                  val file = Utils.newFile(home, subpath)
                   Utils.writeFile(file)(bytes)
                   hashes.update(subpath, Some(MapData(file.lastModified, hash)))
                 }
@@ -79,7 +79,7 @@ object Client {
     // main loop to check for updated files
     while (true) {
       var keySet = hashes.keySet
-      var updates = List[(String, Option[(Array[Byte], Array[Byte])])]()
+      var updates = List[(List[String], Option[(Array[Byte], Array[Byte])])]()
 
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)

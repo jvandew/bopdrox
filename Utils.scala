@@ -38,6 +38,9 @@ object Utils {
     }
   }
 
+  def ensureDir (home: File, subpath: List[String]) : Unit =
+    ensureDir(home, joinPath(subpath))
+
   def ensureDir (home: File, subpath: String) : Unit =
     ensureDir(home + File.separator + subpath)
 
@@ -56,14 +59,31 @@ object Utils {
   }
 
   // find the relative path for a file
-  def getRelativePath (home: File) (file: File) : String =
-    file.getCanonicalPath.stripPrefix(home.getCanonicalPath + File.separator)
+  def getRelativePath (home: File) (file: File) : List[String] = {
+    val filePath = file.getCanonicalPath
+    val homePrefix = home.getCanonicalPath + File.separator
+    val relPathString = filePath.stripPrefix(homePrefix)
+    splitPath(relPathString)
+  }
 
   // wrapper around hasher.digest(bytes)
   def hashBytes (bytes: Array[Byte]) : Array[Byte] = hasher.digest(bytes)
 
   // helper function to hash the contents of a file
   def hashFile (file: File) : Array[Byte] = contentsAndHash(file)._2
+
+  // join together a list of strings representing a file path
+  def joinPath (path: List[String]) : String = path.reduce(_ + File.separator + _)
+
+  // shortcut method to create a File object using our List subpath format
+  def newFile (home: File, subpath: List[String]) : File =
+    new File(home, joinPath(subpath))
+
+  def readFile (home: File, subpath: List[String]) : Array[Byte] =
+    readFile(home, joinPath(subpath))
+
+  def readFile (home: File, subpath: String) : Array[Byte] =
+    readFile(new File(home, subpath))
 
   // read the contents of a file
   def readFile (file: File) : Array[Byte] = {
@@ -73,6 +93,9 @@ object Utils {
     fileIn.close
     bytes
   }
+
+  // split a file path string into a list of strings
+  def splitPath (path: String) : List[String] = path.split(File.separator).toList
 
   // write data to a file
   def writeFile (file: File) (bytes: Array[Byte]) : Unit = {

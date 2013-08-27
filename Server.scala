@@ -6,7 +6,7 @@ object Server {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[String, Option[MapData]]
+  val hashes = new HashMap[List[String], Option[MapData]]
 
   // store a list of all connected clients
   var clients = List[ClientHandler]()
