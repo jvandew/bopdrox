@@ -1,5 +1,6 @@
 import java.io.{File, FileInputStream, FileOutputStream, IOException}
 import java.security.MessageDigest
+import java.util.regex.Pattern
 
 /* This object is for common utility and helper functions that are shared
  * between Server and Client */
@@ -95,7 +96,8 @@ object Utils {
   }
 
   // split a file path string into a list of strings
-  def splitPath (path: String) : List[String] = path.split(File.separator).toList
+  def splitPath (path: String) : List[String] =
+    path.split(Pattern.quote(File.separator)).toList
 
   // write data to a file
   def writeFile (file: File) (bytes: Array[Byte]) : Unit = {
