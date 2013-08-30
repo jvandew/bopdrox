@@ -5,14 +5,12 @@
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
 - implement encryption
-- fix cross-platform issues with storing file pathnames
 - implement fault tolerance for incorrect wire transfers
 - other race conditions exist when updating Server.hashes and Server.clients
-- implement multiple clients
 - gracefully handle errors and disconnects
 - check hashes upon file writes to detect errors
 - avoid subtle bugs
 
 Outstanding bugs:
-- RemovedMessage sent upon Client instantiation; seems to be no-op
+- RemovedMessage sent upon Client instantiation sometimes; seems to be no-op
 - deleting a non-empty directory does not behave correctly
