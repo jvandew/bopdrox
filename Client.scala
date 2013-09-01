@@ -1,12 +1,15 @@
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
-import scala.collection.mutable.HashMap
+import scala.collection.mutable.{HashMap, Queue}
 
 object Client {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
   val hashes = new HashMap[List[String], Option[MapData]]
+
+  // store received Messages for later consumption
+  val messageQueue = new Queue[Message]
 
   // disconnect handler
   // TODO(jacob) Client should try to reconnect, rather than simply terminate
@@ -16,12 +19,56 @@ object Client {
     sys.exit
   }
 
+  private def matchMessage (home: File) (msg: Message) : Unit = {
+    msg match {
+      case FileMessage(fileContents) => {
+        print("handling FileMessage... ")
+
+        // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
+        fileContents.foreach {
+          _ match {
+            // empty directory
+            case (subpath, None) => {
+              val emptyDir = Utils.newFile(home, subpath)
+              emptyDir.mkdirs
+              hashes.update(subpath, None)
+            }
+            // normal file
+            case (subpath, Some((bytes, hash))) => {
+              Utils.ensureDir(home, subpath)
+              val file = Utils.newFile(home, subpath)
+              Utils.writeFile(file)(bytes)
+              hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+            }
+          }
+        }
+
+        println("done")
+      }
+
+      case RemovedMessage(fileSet) => {
+        print("handling RemovedMessage... ")
+
+        fileSet.foreach { filename =>
+          hashes.remove(filename)
+          val file = Utils.newFile(home, filename)
+          file.delete
+        }
+
+      println("done")
+      }
+
+      case _ => throw new IOException("Unknown or incorrect message received")
+    }
+  }
+
   /* Takes a home folder, a binding port, and the address of a running Server */
   def main (args: Array[String]) : Unit = {
     val home = new File(args(0))
     val Array(host, port) = args(1).split(':')
 
-    val getRelPath = Utils.getRelativePath(home) _
+    val getRelPath = Utils.getRelativePath(home)_
+    val matchMsg = matchMessage(home)_
 
     // generate file list and hashes
     print("hashing files... ")
@@ -90,8 +137,17 @@ object Client {
 
     // main loop to check for updated files
     while (true) {
+
+      // process any received Messages
+      // TODO(jacob) this could be an inconvenient way of handling Messages if we have a
+      // large Queue (unlikely with a single user) or a significantly large directory tree
+      while (!messageQueue.isEmpty)
+        matchMsg(messageQueue.dequeue)
+
       var keySet = hashes.keySet
-      var updates = List[(List[String], Option[(Array[Byte], Array[Byte])])]()
+
+      type PathBytesHash = (List[String], Option[(Array[Byte], Array[Byte])])
+      var updates = List[PathBytesHash]()
 
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)
@@ -162,8 +218,6 @@ object Client {
         writeObject(msg)
         println("done")
       }
-
-      // TODO(jacob) currently we don't make sure messages are received...
 
       Thread.sleep(1000)
     }

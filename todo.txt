@@ -4,7 +4,7 @@
   separate branch
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
-- implement encryption
+- implement encryption with nonces
 - what to do about clients connecting with additional files in their home folders?
   currently they are ignored, although deletion will trigger a RemovedMessage
 - other race conditions exist when updating Server.hashes and Server.clients
@@ -16,6 +16,4 @@
 - avoid subtle bugs
 
 Outstanding bugs:
-- RemovedMessage sent upon Client instantiation sometimes; seems to be no-op
 - deleting a non-empty directory does not behave correctly
-- race condition leading to a potential exception in Client main loop dirForeach
