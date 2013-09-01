@@ -9,6 +9,19 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
   private val in = new ObjectInputStream(client.getInputStream)
   private val out = new ObjectOutputStream(client.getOutputStream)
 
+  // continue running this handler
+  private var continue = true
+
+  // disconnect client and mark handler to terminate
+  private def disconnect (ioe: IOException) : Unit = {
+    println("disconnecting client: " + Utils.printSocket(client))
+    Server.clients = Server.clients.diff(List(this))
+    continue = false
+  }
+
+  private def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
+  private val writeObject = Utils.checkedWrite(disconnect)(out)_
+
   private def matchMessage (msg: Message) : Unit = {
     msg match {
       case FileMessage(fileContents) => {
@@ -49,10 +62,11 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
     }
   }
 
-  def message (msg: Message) : Unit = out.writeObject(msg)
+  def message (msg: Message) : Unit = writeObject(msg)
 
   def run : Unit = {
-    println("client connected")
+
+    println("client connected: " + Utils.printSocket(client))
 
     // send client a list of file names and hashes
     val fhList = Server.hashes.toList.map {
@@ -63,10 +77,12 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
     }
 
     val listMsg = FileListMessage(fhList)
-    out.writeObject(listMsg)
 
-    in.readObject match {
-      case FileRequest(files) => {
+    writeObject(listMsg)
+
+    readObject match {
+      case None => () // wait for termination
+      case Some(FileRequest(files)) => {
 
         val fileList = files.map { filename =>
           Server.hashes(filename) match {
@@ -79,20 +95,22 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
         }
 
         val msg = FileMessage(fileList)
-        out.writeObject(msg)
+        writeObject(msg)
 
-        in.readObject match {
-          case Ack => ()
-          case _ => throw new IOException("Unknown or incorrect message received")
+        readObject match {
+          case None => () // wait for termination
+          case Some(Ack) => ()
+          case Some(_) => throw new IOException("Unknown or incorrect message received")
         }
       }
-      case _ => throw new IOException("Unknown or incorrect message received")
+      case Some(_) => throw new IOException("Unknown or incorrect message received")
     }
 
     // main loop to listen for updated files
-    while (true) {
-      in.readObject match {
-        case msg: Message => {
+    while (continue) {
+      readObject match {
+        case None => () // wait for termination
+        case Some(msg: Message) => {
 
           // forward message
           Server.clients.foreach { c =>
@@ -103,7 +121,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
           matchMessage(msg)
         }
 
-        case _ => throw new IOException("Unknown or incorrect message received")
+        case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }
 

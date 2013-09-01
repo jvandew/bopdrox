@@ -4,11 +4,14 @@ import java.io.{File, IOException, ObjectInputStream}
  * from the server. */
 class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
 
+  private def readObject: Option[Object] = Utils.checkedRead(Client.disconnect)(in)
+
   // TODO(jacob) this likely causes race conditions
   def run : Unit = {
     while (true) {
-      in.readObject match {
-        case FileMessage(fileContents) => {
+      readObject match {
+        case None => () // wait for termination
+        case Some(FileMessage(fileContents)) => {
           print("handling FileMessage... ")
 
           // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
@@ -33,7 +36,7 @@ class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
           println("done")
         }
 
-        case RemovedMessage(fileSet) => {
+        case Some(RemovedMessage(fileSet)) => {
           print("handling RemovedMessage... ")
 
           fileSet.foreach { filename =>
@@ -45,7 +48,7 @@ class ClientListener (in: ObjectInputStream) (home: File) extends Runnable {
         println("done")
         }
 
-        case _ => throw new IOException("Unknown or incorrect message received")
+        case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }
 

@@ -5,12 +5,17 @@
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
 - implement encryption
-- implement fault tolerance for incorrect wire transfers
+- what to do about clients connecting with additional files in their home folders?
+  currently they are ignored, although deletion will trigger a RemovedMessage
 - other race conditions exist when updating Server.hashes and Server.clients
-- gracefully handle errors and disconnects
-- check hashes upon file writes to detect errors
+- gracefully handle errors
+- check hashes upon file transfers and writes to detect errors
+- define serialVersionUID for Messages to allow use of different compilers
+- this is a personal (single user) server so concurrency issues can be ignored
+  for the most part, however this is somethng to look at fixing in the future
 - avoid subtle bugs
 
 Outstanding bugs:
 - RemovedMessage sent upon Client instantiation sometimes; seems to be no-op
 - deleting a non-empty directory does not behave correctly
+- race condition leading to a potential exception in Client main loop dirForeach

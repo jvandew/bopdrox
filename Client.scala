@@ -8,11 +8,18 @@ object Client {
   // TODO(jacob) include version vectors at some point
   val hashes = new HashMap[List[String], Option[MapData]]
 
+  // disconnect handler
+  // TODO(jacob) Client should try to reconnect, rather than simply terminate
+  // TODO(jacob) this should be visible only to Client and ClientListener
+  def disconnect (ioe: IOException) : Unit = {
+    println("disconnected from Server; exiting...")
+    sys.exit
+  }
+
   /* Takes a home folder, a binding port, and the address of a running Server */
   def main (args: Array[String]) : Unit = {
     val home = new File(args(0))
-    val localport = args(1).toInt
-    val Array(host, port) = args(2).split(':')
+    val Array(host, port) = args(1).split(':')
 
     val getRelPath = Utils.getRelativePath(home) _
 
@@ -31,19 +38,24 @@ object Client {
     val out = new ObjectOutputStream(serv.getOutputStream)
     val in = new ObjectInputStream(serv.getInputStream)
 
+    def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
+    val writeObject = Utils.checkedWrite(disconnect)(out)_
+
     println("connected to server")
 
     // get list of files and hashes from server
-    in.readObject match {
-      case FileListMessage(fileList) => {
+    readObject match {
+      case None => () // wait for termination
+      case Some(FileListMessage(fileList)) => {
 
         // TODO(jacob) eventually this should only request new/modified files
         val files = fileList.map(_._1)
         val msg = FileRequest(files)
-        out.writeObject(msg)
+        writeObject(msg)
 
-        in.readObject match {
-          case FileMessage(fileContents) => {
+        readObject match {
+          case None => () // wait for termination
+          case Some(FileMessage(fileContents)) => {
 
             // Process list of new files
             // TODO(jacob) also mostly copy-pasted
@@ -65,12 +77,12 @@ object Client {
               }
             }
 
-            out.writeObject(Ack)
+            writeObject(Ack)
           }
-          case _ => throw new IOException("Unknown or incorrect message received")
+          case Some(_) => throw new IOException("Unknown or incorrect message received")
         }
       }
-      case _ => throw new IOException("Unknown or incorrect message received")
+      case Some(_) => throw new IOException("Unknown or incorrect message received")
     }
 
     // begin listener thread
@@ -139,7 +151,7 @@ object Client {
         case _ => {
           print("update(s) detected. notifying Server... ")
           val msg = FileMessage(updates)
-          out.writeObject(msg)
+          writeObject(msg)
           println("done")
         }
       }
@@ -147,7 +159,7 @@ object Client {
       if (!keySet.isEmpty) {
         print("removed files detected. notifying Server... ")
         val msg = RemovedMessage(keySet)
-        out.writeObject(msg)
+        writeObject(msg)
         println("done")
       }
 

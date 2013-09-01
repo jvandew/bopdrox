@@ -1,4 +1,6 @@
-import java.io.{File, FileInputStream, FileOutputStream, IOException}
+import java.io.{File, FileInputStream, FileOutputStream, IOException,
+                ObjectInputStream, ObjectOutputStream}
+import java.net.Socket
 import java.security.MessageDigest
 import java.util.regex.Pattern
 
@@ -12,6 +14,29 @@ object Utils {
    * is empty by only calling hasher.digest(data) */
   // TODO(jacob) this could be enforced staticly if we so desire
   val hasher = MessageDigest.getInstance(hash_algo)
+
+  /* Performs a read on some ObjectInputStream, checking that the operation
+   * succeeds while handling failure */
+  def checkedRead (handler: IOException => Unit) (in: ObjectInputStream) : Option[Object] = {
+    try {
+      Some(in.readObject)
+    } catch {
+      case ioe: IOException => {
+        handler(ioe)
+        None
+      }
+    }
+  }
+
+  /* Perfroms a write on some ObjectOutputStream, checking that the operation
+   * succeeds while handling failure */
+  def checkedWrite (handler: IOException => Unit) (out: ObjectOutputStream) (msg: Message) : Unit = {
+    try { 
+      out.writeObject(msg)
+    } catch {
+      case ioe: IOException => handler(ioe)
+    }
+  }
 
   // get the contents of a file and its hash value in that order
   def contentsAndHash (file: File) : (Array[Byte], Array[Byte]) = {
@@ -79,6 +104,10 @@ object Utils {
   // shortcut method to create a File object using our List subpath format
   def newFile (home: File, subpath: List[String]) : File =
     new File(home, joinPath(subpath))
+
+  // a nice way to print out the standard host:port from a socket
+  def printSocket (sock: Socket) : String =
+    sock.getInetAddress.getHostName + ":" + sock.getPort
 
   def readFile (home: File, subpath: List[String]) : Array[Byte] =
     readFile(home, joinPath(subpath))
