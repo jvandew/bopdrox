@@ -5,6 +5,7 @@
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
 - implement encryption with nonces
+- use Scala-style concurrency rather than Java-style concurrency
 - what to do about clients connecting with additional files in their home folders?
   currently they are ignored, although deletion will trigger a RemovedMessage
 - other race conditions exist when updating Server.hashes and Server.clients
