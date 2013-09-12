@@ -1,17 +1,21 @@
+Dreams:
 - implement file update/creation/deletion checking using inotify in a separate branch
   (see sun.nio.fs.LinuxWatchService for an example)
 - implement file update/creation/deletion checking using java.nio.file in java 7 in a
   separate branch
-- implement timestamp checking on a client's files upon connection to the server
+- implement concurrency through Actors in a separate branch
+
+TODO:
+- check timestamp on a client's files upon connection to the server
 - implement version vectors for already-connected clients
 - implement encryption with nonces
-- implement concurrency through Actors in a separate branch
-- what to do about clients connecting with additional files in their home folders?
-  currently they are ignored, although deletion will trigger a RemovedMessage
 - (more) gracefully handle errors
 - check hashes upon file transfers and writes to detect errors
-- define serialVersionUID for Messages to allow use of different compilers
 - avoid subtle bugs
+
+Design Questions:
+- what to do about clients connecting with additional files in their home folders?
+  currently they are ignored, although deletion will trigger a RemovedMessage
 
 Outstanding bugs:
 - deleting a non-empty directory does not behave correctly
