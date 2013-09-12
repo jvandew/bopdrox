@@ -46,6 +46,7 @@ object Utils {
 
   // recursively walk a directory tree and apply the given function to each file
   // calling this function on a file is an error
+  // TODO(jacob) if dir is deleted during this call bad things can happen
   def dirForeach (dir: File) (proc: File => Unit) (empty: File => Unit) : Unit = {
     Option(dir.listFiles) match {
       case None =>

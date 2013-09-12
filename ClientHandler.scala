@@ -15,13 +15,21 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
   // disconnect client and mark handler to terminate
   private def disconnect (ioe: IOException) : Unit = {
     println("disconnecting client: " + Utils.printSocket(client))
-    Server.clients = Server.clients.diff(List(this))
+
+    Server.synchronized {
+      Server.clients = Server.clients.diff(List(this))
+    }
+
     continue = false
   }
 
   private def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
   private val writeObject = Utils.checkedWrite(disconnect)(out)_
 
+  /* Handle message matching and file operations. Note that due the variable
+   * nature of network communications it does not make sense to enforce FIFO
+   * ordering of message handling, only that the file operation + hash map
+   * update is atomic. */
   private def matchMessage (msg: Message) : Unit = {
     msg match {
       case FileMessage(fileContents) => {
@@ -31,17 +39,23 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
           _ match {
             // empty directory
             case (subpath, None) => {
-              val emptyDir = Utils.newFile(home, subpath)
-              emptyDir.mkdirs
-              Server.hashes.update(subpath, None)
+              Server.hashes.synchronized {
+                val emptyDir = Utils.newFile(home, subpath)
+                emptyDir.mkdirs
+                Server.hashes.update(subpath, None)
+              }
             }
+
             // normal file
             case (subpath, Some((bytes, hash))) => {
-              Utils.ensureDir(home, subpath)
-              val file = Utils.newFile(home, subpath)
-              Utils.writeFile(file)(bytes)
-              Server.hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+              Server.hashes.synchronized {
+                Utils.ensureDir(home, subpath)
+                val file = Utils.newFile(home, subpath)
+                Utils.writeFile(file)(bytes)
+                Server.hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+              }
             }
+
           }
         }
 
@@ -52,9 +66,11 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
         print("handling RemovedMessage... ")
 
         fileSet.foreach { filename =>
-          Server.hashes.remove(filename)
-          val file = Utils.newFile(home, filename)
-          file.delete
+          Server.hashes.synchronized {
+            Server.hashes.remove(filename)
+            val file = Utils.newFile(home, filename)
+            file.delete
+          }
         }
 
         println("done")
@@ -68,7 +84,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
 
     println("client connected: " + Utils.printSocket(client))
 
-    // send client a list of file names and hashes
+    // send client a list of file names and hashes; do not synchronize on read
     val fhList = Server.hashes.toList.map {
       _ match {
         case (subpath, None) => (subpath, None)

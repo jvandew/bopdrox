@@ -9,6 +9,7 @@ object Server {
   val hashes = new HashMap[List[String], Option[MapData]]
 
   // store a list of all connected clients
+  // note since this is a var we sychronize on Server instead of clients directly
   var clients = List[ClientHandler]()
 
   /* Takes a home folder and a binding port */
@@ -21,6 +22,7 @@ object Server {
     // generate file list and hashes
     print("hashing files... ")
 
+    // no handlers yet -> no synchronization
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
       hashes.update(getRelPath(file), Some(MapData(file.lastModified, hash)))
@@ -36,7 +38,11 @@ object Server {
     while (true) {
       val client = serv.accept
       val handler = new ClientHandler(client)(home)
-      clients = handler::clients
+
+      Server.synchronized {
+        clients = handler::clients 
+      }
+
       new Thread(handler).start
     }
 

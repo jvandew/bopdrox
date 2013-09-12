@@ -149,6 +149,7 @@ object Client {
       type PathBytesHash = (List[String], Option[(Array[Byte], Array[Byte])])
       var updates = List[PathBytesHash]()
 
+      // TODO(jacob) doing this asynchronously might be worthwhile. sleep on it
       Utils.dirForeach(home) { file =>
         val path = getRelPath(file)
         keySet = keySet - path

@@ -5,15 +5,12 @@
 - implement timestamp checking on a client's files upon connection to the server
 - implement version vectors for already-connected clients
 - implement encryption with nonces
-- use Scala-style concurrency rather than Java-style concurrency
+- implement concurrency through Actors in a separate branch
 - what to do about clients connecting with additional files in their home folders?
   currently they are ignored, although deletion will trigger a RemovedMessage
-- other race conditions exist when updating Server.hashes and Server.clients
-- gracefully handle errors
+- (more) gracefully handle errors
 - check hashes upon file transfers and writes to detect errors
 - define serialVersionUID for Messages to allow use of different compilers
-- this is a personal (single user) server so concurrency issues can be ignored
-  for the most part, however this is somethng to look at fixing in the future
 - avoid subtle bugs
 
 Outstanding bugs:
