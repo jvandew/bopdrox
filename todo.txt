@@ -1,9 +1,9 @@
 Dreams:
-- implement file update/creation/deletion checking using inotify in a separate branch
+- implement file update/creation/deletion checking using inotify
   (see sun.nio.fs.LinuxWatchService for an example)
-- implement file update/creation/deletion checking using java.nio.file in java 7 in a
-  separate branch
-- implement concurrency through Actors in a separate branch
+- implement file update/creation/deletion checking using java.nio.file in java 7
+- implement concurrency through Actors
+- formal test infrastructure
 
 TODO:
 - check timestamp on a client's files upon connection to the server

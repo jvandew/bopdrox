@@ -1,11 +1,10 @@
-package client
+package bopdrox.client
 
+import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
+import bopdrox.util.{MapData, Utils}
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, Queue}
-
-import messages.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
-import util.{MapData, Utils}
 
 object Client {
 

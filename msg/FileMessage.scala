@@ -1,4 +1,4 @@
-package messages
+package bopdrox.msg
 
 // A convenient capsule for transferring file names and contents over the wire
 // tuple in order is file path, contents, and hash

@@ -1,10 +1,9 @@
-package server
+package bopdrox.server
 
+import bopdrox.util.{MapData, Utils}
 import java.io.File
 import java.net.ServerSocket
 import scala.collection.mutable.HashMap
-
-import util.{MapData, Utils}
 
 object Server {
 

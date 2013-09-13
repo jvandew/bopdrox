@@ -1,4 +1,4 @@
-package messages
+package bopdrox.msg
 
 import scala.collection.Set
 

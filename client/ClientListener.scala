@@ -1,9 +1,8 @@
-package client
+package bopdrox.client
 
+import bopdrox.msg.Message
+import bopdrox.util.Utils
 import java.io.{File, IOException, ObjectInputStream}
-
-import messages.Message
-import util.Utils
 
 /* A ClientListener is a Runnable object designed to listen for file updates
  * from the server. */

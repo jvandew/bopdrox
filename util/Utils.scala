@@ -1,12 +1,11 @@
-package util
+package bopdrox.util
 
+import bopdrox.msg.Message
 import java.io.{File, FileInputStream, FileOutputStream, IOException,
                 ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import java.security.MessageDigest
 import java.util.regex.Pattern
-
-import messages.Message
 
 /* This object is for common utility and helper functions that are shared
  * between Server and Client */

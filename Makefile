@@ -1,31 +1,21 @@
-.PHONY: all clean messages util server client
-VPATH = messages:util:server:client
+.PHONY: all clean msg util server client
 
-scalac = scalac -deprecation -optimise
-
-all: messages util server client
-
-infra: messages util
-
-clientdeps: infra client
-
-serverdeps: infra server
+all: msg util server client
 
 clean:
-	-rm messages/*.class
-	-rm util/*.class
-	-rm server/*.class
-	-rm client/*.class
+	@-$(MAKE) clean -C msg -s
+	@-$(MAKE) clean -C util -s
+	@-$(MAKE) clean -C server -s
+	@-$(MAKE) clean -C client -s
+	
+msg:
+	@$(MAKE) msg -C msg --no-print-directory
 
-messages: Ack.scala FileListMessage.scala FileMessage.scala FileRequest.scala \
-					Message.scala RemovedMessage.scala
-	$(scalac) $^
+util: msg
+	@$(MAKE) util -C util --no-print-directory
 
-util: MapData.scala Utils.scala
-	$(scalac) $^
+server: msg util
+	@$(MAKE) server -C server --no-print-directory
 
-server: ClientHandler.scala Server.scala
-	$(scalac) $^
-
-client: Client.scala ClientListener.scala
-	$(scalac) $^
+client: msg util
+	@$(MAKE) client -C client --no-print-directory
