@@ -1,6 +1,10 @@
+package server
+
 import java.io.File
 import java.net.ServerSocket
 import scala.collection.mutable.HashMap
+
+import util.{MapData, Utils}
 
 object Server {
 

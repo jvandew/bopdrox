@@ -1,6 +1,11 @@
+package client
+
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, Queue}
+
+import messages.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
+import util.{MapData, Utils}
 
 object Client {
 

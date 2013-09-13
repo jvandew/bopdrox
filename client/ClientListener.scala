@@ -1,4 +1,9 @@
+package client
+
 import java.io.{File, IOException, ObjectInputStream}
+
+import messages.Message
+import util.Utils
 
 /* A ClientListener is a Runnable object designed to listen for file updates
  * from the server. */

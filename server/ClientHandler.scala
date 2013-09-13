@@ -1,6 +1,11 @@
+package server
+
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, HashSet}
+
+import messages.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
+import util.{MapData, Utils}
 
 /* A ClientHandler is a Runnable object designed to handle all communications
  * with a Client */
