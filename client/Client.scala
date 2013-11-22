@@ -99,9 +99,16 @@ object Client {
       case None => () // wait for termination
       case Some(FileListMessage(fileList)) => {
 
-        // TODO(jacob) eventually this should only request new/modified files
-        val files = fileList.map(_._1)
-        val msg = FileRequest(files)
+        val filtered = fileList.filter(nh =>
+          (hashes.get(nh._1), nh._2) match {
+            case (None, _) => true  //file or folder not present on client
+            case (Some(None), None) => false  // folders match
+            case (Some(None), Some(_)) => true  // folder on client is now file on server
+            case (Some(Some(_)), None) => true  // file on client is now folder on server
+            case (Some(Some(MapData(_, hash1))), Some(hash2)) => !Utils.verifyHash(hash1)(hash2)
+          }
+        )
+        val msg = FileRequest(filtered.map(_._1))
         writeObject(msg)
 
         readObject match {

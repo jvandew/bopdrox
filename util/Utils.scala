@@ -132,6 +132,10 @@ object Utils {
   def splitPath (path: String) : List[String] =
     path.split(Pattern.quote(File.separator)).toList
 
+  // check whether or not two hashes match
+  def verifyHash (hash1: Array[Byte])(hash2: Array[Byte]) =
+    hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
+
   // write data to a file
   def writeFile (file: File) (bytes: Array[Byte]) : Unit = {
     val fileOut = new FileOutputStream(file)
