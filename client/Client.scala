@@ -1,7 +1,7 @@
 package bopdrox.client
 
 import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
-import bopdrox.util.{MapData, Utils}
+import bopdrox.util.Utils
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, Queue}
@@ -10,7 +10,7 @@ object Client {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[List[String], Option[MapData]]
+  val hashes = new HashMap[List[String], Option[ClientData]]
 
   // store received Messages for later consumption
   val messageQueue = new Queue[Message]
@@ -42,7 +42,7 @@ object Client {
               Utils.ensureDir(home, subpath)
               val file = Utils.newFile(home, subpath)
               Utils.writeFile(file)(bytes)
-              hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+              hashes.update(subpath, Some(ClientData(file.lastModified, hash)))
             }
           }
         }
@@ -79,7 +79,7 @@ object Client {
 
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), Some(MapData(file.lastModified, hash)))
+      hashes.update(getRelPath(file), Some(ClientData(file.lastModified, hash)))
     }
     { dir => hashes.update(getRelPath(dir), None)}
 
@@ -101,11 +101,11 @@ object Client {
 
         val filtered = fileList.filter(nh =>
           (hashes.get(nh._1), nh._2) match {
-            case (None, _) => true  //file or folder not present on client
+            case (None, _) => true  // file or folder not present on client
             case (Some(None), None) => false  // folders match
             case (Some(None), Some(_)) => true  // folder on client is now file on server
             case (Some(Some(_)), None) => true  // file on client is now folder on server
-            case (Some(Some(MapData(_, hash1))), Some(hash2)) => !Utils.verifyHash(hash1)(hash2)
+            case (Some(Some(ClientData(_, hash1))), Some(hash2)) => !Utils.verifyHash(hash1)(hash2)
           }
         )
         val msg = FileRequest(filtered.map(_._1))
@@ -130,7 +130,7 @@ object Client {
                   Utils.ensureDir(home, subpath)
                   val file = Utils.newFile(home, subpath)
                   Utils.writeFile(file)(bytes)
-                  hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+                  hashes.update(subpath, Some(ClientData(file.lastModified, hash)))
                 }
               }
             }
@@ -181,7 +181,7 @@ object Client {
 
         if (update) {
           val (bytes, hash) = Utils.contentsAndHash(file)
-          hashes.update(path, Some(MapData(file.lastModified, hash)))
+          hashes.update(path, Some(ClientData(file.lastModified, hash)))
           updates = (path, Some(bytes, hash))::updates
         }
 

@@ -2,8 +2,8 @@ scalac = scalac -deprecation -optimise -classpath ../.. -d ../..
 
 .PHONY: clean util
 
-util: MapData.scala Utils.scala
-	$(scalac) MapData.scala Utils.scala
+util: Utils.scala
+	$(scalac) Utils.scala
 
 clean:
 	-rm *.class
