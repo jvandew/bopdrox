@@ -6,8 +6,9 @@ Dreams:
 - formal test infrastructure
 
 TODO:
-- check timestamp on a client's files upon connection to the server
+- check hash on a client's files upon connection to the server
 - implement version vectors for already-connected clients
+- file level locking instead of hash map level lockings
 - implement encryption with nonces
 - (more) gracefully handle errors
 - check hashes upon file transfers and writes to detect errors
@@ -19,3 +20,4 @@ Design Questions:
 
 Outstanding bugs:
 - deleting a non-empty directory does not behave correctly
+- possible race condition: updating files during reads

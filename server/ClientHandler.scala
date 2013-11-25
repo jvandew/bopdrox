@@ -1,7 +1,7 @@
 package bopdrox.server
 
 import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
-import bopdrox.util.{MapData, Utils}
+import bopdrox.util.Utils
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, HashSet}
@@ -52,11 +52,26 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
 
             // normal file
             case (subpath, Some((bytes, hash))) => {
+              val file = Utils.newFile(home, subpath)
+
               Server.hashes.synchronized {
-                Utils.ensureDir(home, subpath)
-                val file = Utils.newFile(home, subpath)
+
+                val data = Server.hashes.get(subpath) match {
+                  case None => {  // new file
+                    Utils.ensureDir(home, subpath)
+                    ServerData(file.lastModified, hash, Nil)
+                  }
+                  case Some(None) => {  // empty directory is now a file
+                    file.delete
+                    ServerData(file.lastModified, hash, Nil)
+                  }
+                  case Some(Some(ServerData(pTime, pHash, chain))) => { // updated file
+                    ServerData(file.lastModified, hash, (pTime, pHash)::chain)
+                  }
+                }
+
                 Utils.writeFile(file)(bytes)
-                Server.hashes.update(subpath, Some(MapData(file.lastModified, hash)))
+                Server.hashes.update(subpath, Some(data))
               }
             }
 

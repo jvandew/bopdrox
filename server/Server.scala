@@ -1,6 +1,6 @@
 package bopdrox.server
 
-import bopdrox.util.{MapData, Utils}
+import bopdrox.util.Utils
 import java.io.File
 import java.net.ServerSocket
 import scala.collection.mutable.HashMap
@@ -9,7 +9,7 @@ object Server {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[List[String], Option[MapData]]
+  val hashes = new HashMap[List[String], Option[ServerData]]
 
   // store a list of all connected clients
   // note since this is a var we sychronize on Server instead of clients directly
@@ -28,7 +28,7 @@ object Server {
     // no handlers yet -> no synchronization
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), Some(MapData(file.lastModified, hash)))
+      hashes.update(getRelPath(file), Some(ServerData(file.lastModified, hash, Nil)))
     }
     { dir => hashes.update(getRelPath(dir), None)}
 
