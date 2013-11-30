@@ -1,4 +1,4 @@
-scalac = scalac -deprecation -optimise -classpath ../.. -d ../..
+scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
 
 .PHONY: clean msg
 

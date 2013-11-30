@@ -1,6 +1,6 @@
 package bopdrox.client
 
-import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
+import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest, Message, RemovedMessage}
 import bopdrox.util.Utils
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
@@ -38,11 +38,11 @@ object Client {
               hashes.update(subpath, None)
             }
             // normal file
-            case (subpath, Some((bytes, hash))) => {
+            case (subpath, Some(data)) => {
               Utils.ensureDir(home, subpath)
               val file = Utils.newFile(home, subpath)
-              Utils.writeFile(file)(bytes)
-              hashes.update(subpath, Some(ClientData(file.lastModified, hash)))
+              Utils.writeFile(file)(data.bytes)
+              hashes.update(subpath, Some(ClientData(file.lastModified, data.newHash)))
             }
           }
         }
@@ -53,9 +53,9 @@ object Client {
       case RemovedMessage(fileSet) => {
         print("handling RemovedMessage... ")
 
-        fileSet.foreach { filename =>
-          hashes.remove(filename)
-          val file = Utils.newFile(home, filename)
+        fileSet.foreach { nameHash =>
+          hashes.remove(nameHash._1)
+          val file = Utils.newFile(home, nameHash._1)
           file.delete
         }
 
@@ -126,11 +126,11 @@ object Client {
                   hashes.update(subpath, None)
                 }
                 // normal file
-                case (subpath, Some((bytes, hash))) => {
+                case (subpath, Some(fileData)) => {
                   Utils.ensureDir(home, subpath)
                   val file = Utils.newFile(home, subpath)
-                  Utils.writeFile(file)(bytes)
-                  hashes.update(subpath, Some(ClientData(file.lastModified, hash)))
+                  Utils.writeFile(file)(fileData.bytes)
+                  hashes.update(subpath, Some(ClientData(file.lastModified, fileData.newHash)))
                 }
               }
             }
@@ -156,9 +156,7 @@ object Client {
         matchMsg(messageQueue.dequeue)
 
       var keySet = hashes.keySet
-
-      type PathBytesHash = (List[String], Option[(Array[Byte], Array[Byte])])
-      var updates = List[PathBytesHash]()
+      var updates = List[(List[String], Option[FileMsgData])]()
 
       // TODO(jacob) doing this asynchronously might be worthwhile. sleep on it
       Utils.dirForeach(home) { file =>
@@ -182,7 +180,7 @@ object Client {
         if (update) {
           val (bytes, hash) = Utils.contentsAndHash(file)
           hashes.update(path, Some(ClientData(file.lastModified, hash)))
-          updates = (path, Some(bytes, hash))::updates
+          updates = (path, Some(FileMsgData(bytes, None, hash)))::updates
         }
 
       }
@@ -206,11 +204,13 @@ object Client {
         }
       }
 
-      // remove any deleted files from our hashmap
-      keySet = keySet.filter { key =>
+      // add our removed keys and their file hashes to a transfer map
+      val keyHashes = new HashMap[List[String], Option[Array[Byte]]]()
+      keySet.foreach { key =>
         hashes.remove(key) match {
-          case None => false
-          case Some(_) => true
+          case None => ()
+          case Some(None) => keyHashes.update(key, None)
+          case Some(Some(fileData)) => keyHashes.update(key, Some(fileData.hash))
         }
       }
 
@@ -224,9 +224,9 @@ object Client {
         }
       }
 
-      if (!keySet.isEmpty) {
+      if (!keyHashes.isEmpty) {
         print("removed files detected. notifying Server... ")
-        val msg = RemovedMessage(keySet)
+        val msg = RemovedMessage(keyHashes)
         writeObject(msg)
         println("done")
       }

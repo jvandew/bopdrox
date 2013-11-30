@@ -1,6 +1,6 @@
 package bopdrox.server
 
-import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileRequest, Message, RemovedMessage}
+import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest, Message, RemovedMessage}
 import bopdrox.util.Utils
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
@@ -51,26 +51,27 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
             }
 
             // normal file
-            case (subpath, Some((bytes, hash))) => {
+            case (subpath, Some(msgData)) => {
               val file = Utils.newFile(home, subpath)
 
               Server.hashes.synchronized {
 
+                Utils.writeFile(file)(msgData.bytes)
+
                 val data = Server.hashes.get(subpath) match {
                   case None => {  // new file
                     Utils.ensureDir(home, subpath)
-                    ServerData(file.lastModified, hash, Nil)
+                    ServerData(file.lastModified, msgData.newHash, Nil)
                   }
                   case Some(None) => {  // empty directory is now a file
                     file.delete
-                    ServerData(file.lastModified, hash, Nil)
+                    ServerData(file.lastModified, msgData.newHash, Nil)
                   }
                   case Some(Some(ServerData(pTime, pHash, chain))) => { // updated file
-                    ServerData(file.lastModified, hash, (pTime, pHash)::chain)
+                    ServerData(file.lastModified, msgData.newHash, (pTime, pHash)::chain)
                   }
                 }
 
-                Utils.writeFile(file)(bytes)
                 Server.hashes.update(subpath, Some(data))
               }
             }
@@ -84,10 +85,10 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
       case RemovedMessage(fileSet) => {
         print("handling RemovedMessage... ")
 
-        fileSet.foreach { filename =>
+        fileSet.foreach { nameHash =>
           Server.hashes.synchronized {
-            Server.hashes.remove(filename)
-            val file = Utils.newFile(home, filename)
+            Server.hashes.remove(nameHash._1)
+            val file = Utils.newFile(home, nameHash._1)
             file.delete
           }
         }
@@ -123,8 +124,8 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
           Server.hashes(filename) match {
             case None => (filename, None)
             case Some(fileData) => {
-              val contents = Utils.readFile(home, filename)
-              (filename, Some(contents, fileData.hash))
+              val bytes = Utils.readFile(home, filename)
+              (filename, Some(FileMsgData(bytes, None, fileData.hash)))
             }
           }
         }

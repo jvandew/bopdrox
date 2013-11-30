@@ -5,6 +5,19 @@ Dreams:
 - implement concurrency through Actors
 - formal test infrastructure
 
+For Deployment:
+- finish implementing consistency checks upon writes
+  - modify messages to include a second hash
+  - write logic to verify BOTH old and new hashes upon transfer
+  - write logic/messages to reject invalid updates
+  - write logic for hash verification on client updates
+  - figure out how to handle conflicted copies
+- handle Client disconnection and reconnection smoothly
+  - require both timeout and broken socket handling
+  - Client should be able to operate offline the same as online, minus syncing to Server
+  - upon reconnection perform usual handshake.
+  - from Server's perspective, Client reconnection and connection should look identical
+
 TODO:
 - check hash on a client's files upon connection to the server
 - implement version vectors for already-connected clients
