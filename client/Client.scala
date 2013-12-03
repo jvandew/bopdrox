@@ -50,13 +50,13 @@ object Client {
         println("done")
       }
 
-      case RemovedMessage(fileSet) => {
+      case RemovedMessage(fileMap) => {
         print("handling RemovedMessage... ")
 
-        fileSet.foreach { nameHash =>
+        fileMap.foreach { nameHash =>
           hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
-          file.delete
+          Utils.dirDelete(file)
         }
 
       println("done")
@@ -66,7 +66,7 @@ object Client {
     }
   }
 
-  /* Takes a home folder, a binding port, and the address of a running Server */
+  /* Takes a home folder and the address of a running Server */
   def main (args: Array[String]) : Unit = {
     val home = new File(args(0))
     val Array(host, port) = args(1).split(':')
@@ -207,10 +207,17 @@ object Client {
       // add our removed keys and their file hashes to a transfer map
       val keyHashes = new HashMap[List[String], Option[Array[Byte]]]()
       keySet.foreach { key =>
+
         hashes.remove(key) match {
-          case None => ()
-          case Some(None) => keyHashes.update(key, None)
-          case Some(Some(fileData)) => keyHashes.update(key, Some(fileData.hash))
+          case None => () // not in hashmap (would have excepted a few lines earlier)
+          case Some(None) => keyHashes.update(key, None)  // empty directory
+          case Some(Some(fileData)) => keyHashes.update(key, Some(fileData.hash)) // file
+        }
+
+        // if we deleted a parent folder, we must notify the Server
+        Utils.getDeleted(home, key) match {
+          case `key` => ()
+          case deleted => keyHashes.update(deleted, None)
         }
       }
 

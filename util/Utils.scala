@@ -47,6 +47,26 @@ object Utils {
     (bytes, hasher.digest(bytes))
   }
 
+  // Delete the given directory and all files contained within. If a file is
+  // given as the argument it too will meet its demise.
+  def dirDelete (dir: File) : Boolean = {
+    Option(dir.listFiles) match {
+      case None => dir.delete
+      case Some(Array()) => dir.delete
+      case Some(files) => {
+        val deletions = files.map { file =>
+          if (file.isFile)
+            file.delete
+          else {
+            dirDelete(file)
+            dir.delete
+          }
+        }
+        deletions.reduce(_ && _)
+      }
+    }
+  }
+
   // recursively walk a directory tree and apply the given function to each file
   // calling this function on a file is an error
   // TODO(jacob) if dir is deleted during this call bad things can happen
@@ -88,12 +108,41 @@ object Utils {
     }
   }
 
-  // find the relative path for a file
+  /* Find and return the highest deleted folder subpath in the given subpath.
+   * If no parent folder has been deleted the subpath itself is returned.
+   * Note that if nothing has been deleted the subpath will still be returned.
+   * This function is also not guranteed correct results if folders along the
+   * subpath are deleted during execution. If the home folder has been deleted
+   * this function will return the top folder contained within home. You can't
+   * go home again, but you can sure be in denial about it. */
+  def getDeleted (home: File, subpath: List[String]) : List[String] = {
+    
+    def loop (dir: File, path: List[String]) : List[String] = {
+      path match {
+        case Nil => getRelativePath(home)(dir)
+        case p::ps => {
+          val subdir = new File(dir, p)
+          if (!subdir.exists)
+            getRelativePath(home)(subdir)
+          else
+            loop(subdir, ps)
+        }
+      }
+    }
+
+    loop(home, subpath)
+  }
+
+  // find the relative path for a file. requires file to be contained within home
   def getRelativePath (home: File) (file: File) : List[String] = {
     val filePath = file.getCanonicalPath
     val homePrefix = home.getCanonicalPath + File.separator
     val relPathString = filePath.stripPrefix(homePrefix)
-    splitPath(relPathString)
+
+    if (relPathString == filePath)
+      Nil
+    else
+      splitPath(relPathString)
   }
 
   // wrapper around hasher.digest(bytes)
@@ -106,8 +155,12 @@ object Utils {
   def joinPath (path: List[String]) : String = path.reduce(_ + File.separator + _)
 
   // shortcut method to create a File object using our List subpath format
-  def newFile (home: File, subpath: List[String]) : File =
-    new File(home, joinPath(subpath))
+  def newFile (home: File, subpath: List[String]) : File = {
+    subpath match {
+      case Nil => home
+      case path => new File(home, joinPath(path))
+    }
+  }
 
   // a nice way to print out the standard host:port from a socket
   def printSocket (sock: Socket) : String =

@@ -56,8 +56,6 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
 
               Server.hashes.synchronized {
 
-                Utils.writeFile(file)(msgData.bytes)
-
                 val data = Server.hashes.get(subpath) match {
                   case None => {  // new file
                     Utils.ensureDir(home, subpath)
@@ -72,6 +70,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
                   }
                 }
 
+                Utils.writeFile(file)(msgData.bytes)
                 Server.hashes.update(subpath, Some(data))
               }
             }
@@ -82,14 +81,14 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
         println("done")
       }
 
-      case RemovedMessage(fileSet) => {
+      case RemovedMessage(fileMap) => {
         print("handling RemovedMessage... ")
 
-        fileSet.foreach { nameHash =>
+        fileMap.foreach { nameHash =>
           Server.hashes.synchronized {
             Server.hashes.remove(nameHash._1)
             val file = Utils.newFile(home, nameHash._1)
-            file.delete
+            Utils.dirDelete(file)
           }
         }
 

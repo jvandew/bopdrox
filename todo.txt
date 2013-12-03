@@ -7,7 +7,6 @@ Dreams:
 
 For Deployment:
 - finish implementing consistency checks upon writes
-  - modify messages to include a second hash
   - write logic to verify BOTH old and new hashes upon transfer
   - write logic/messages to reject invalid updates
   - write logic for hash verification on client updates
@@ -32,5 +31,6 @@ Design Questions:
   currently they are ignored, although deletion will trigger a RemovedMessage
 
 Outstanding bugs:
-- deleting a non-empty directory does not behave correctly
-- possible race condition: updating files during reads
+- possibly duplicating directories and the files they contain when Clients check for updates
+  (leading to ex.- adding both a new file and its new parent directory to the hash map)
+- deleting a non-empty directory does not behave correctly. this could be partially due to the above bug
