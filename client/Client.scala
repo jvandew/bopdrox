@@ -23,26 +23,48 @@ object Client {
     sys.exit
   }
 
+  // note this method is not called asnchronously
   private def matchMessage (home: File) (msg: Message) : Unit = {
+
+    val getRelPath = Utils.getRelativePath(home) _
+
     msg match {
       case FileMessage(fileContents) => {
-        print("handling FileMessage... ")
+        println("handling FileMessage... ")
 
         // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
         fileContents.foreach {
           _ match {
             // empty directory
             case (subpath, None) => {
+              println(subpath)
               val emptyDir = Utils.newFile(home, subpath)
+              if (emptyDir.exists) emptyDir.delete
               emptyDir.mkdirs
+              println("added to map: " + subpath)
               hashes.update(subpath, None)
             }
+
             // normal file
-            case (subpath, Some(data)) => {
-              Utils.ensureDir(home, subpath)
+            case (subpath, Some(msgData)) => {
+              println(subpath)
               val file = Utils.newFile(home, subpath)
-              Utils.writeFile(file)(data.bytes)
-              hashes.update(subpath, Some(ClientData(file.lastModified, data.newHash)))
+
+              hashes.get(subpath) match {
+                case None => {  // new file
+                  Utils.ensureDir(home, subpath)
+                  Utils.findParent(home)(subpath)(f => hashes.contains(getRelPath(f))) match {
+                    case `subpath` => ()  // no previously empty folder to remove
+                    case parent => hashes.remove(parent)
+                  }
+                }
+
+                case Some(None) => file.delete // empty directory is now a file
+                case Some(Some(_)) => () // updated file
+              }
+
+              Utils.writeFile(file)(msgData.bytes)
+              hashes.update(subpath, Some(ClientData(file.lastModified, msgData.newHash)))
             }
           }
         }
@@ -51,15 +73,37 @@ object Client {
       }
 
       case RemovedMessage(fileMap) => {
-        print("handling RemovedMessage... ")
+        println("handling RemovedMessage... ")
 
         fileMap.foreach { nameHash =>
+          println(nameHash._1)
+
           hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
-          Utils.dirDelete(file)
+          
+          nameHash._2 match {
+            case None => {
+
+              file.list match {
+                case Array() => file.delete // empty folder. nothing to see here
+                case _ => Utils.dirForeach(file) { delFile =>
+                  hashes.remove(getRelPath(delFile))
+                  delFile.delete // would happen in dirDelete, but more efficient here
+                }
+                { delDir =>
+                  hashes.remove(getRelPath(delDir))
+                  delDir.delete // would happen in dirDelete, but more efficient here
+                }
+              }
+
+              Utils.dirDelete(file)
+            }
+
+            case Some(hash) => file.delete
+          }
         }
 
-      println("done")
+        println("done")
       }
 
       case _ => throw new IOException("Unknown or incorrect message received")
@@ -208,23 +252,32 @@ object Client {
       val keyHashes = new HashMap[List[String], Option[Array[Byte]]]()
       keySet.foreach { key =>
 
-        hashes.remove(key) match {
-          case None => () // not in hashmap (would have excepted a few lines earlier)
-          case Some(None) => keyHashes.update(key, None)  // empty directory
-          case Some(Some(fileData)) => keyHashes.update(key, Some(fileData.hash)) // file
-        }
+        val oldData = hashes.remove(key)
 
-        // if we deleted a parent folder, we must notify the Server
+        // determine if we deleted a parent folder or just a file or empty folder
         Utils.getDeleted(home, key) match {
-          case `key` => ()
-          case deleted => keyHashes.update(deleted, None)
+          case `key` => oldData match {
+            case None => () // not in hashmap
+            case Some(None) => {
+              Utils.newFile(home, key).list match {
+                case Array() => keyHashes.update(key, None) // empty file, actually deleted
+                case _ => ()  // new file/folder created in previously empty folder
+              }
+            }
+            case Some(Some(fileData)) => keyHashes.update(key, Some(fileData.hash)) // file
+          }
+          case deleted => {
+            println("non-key deleted: " + deleted)
+            keyHashes.update(deleted, None)
+          }
         }
       }
 
       updates match {
         case Nil => ()  // no updates
         case _ => {
-          print("update(s) detected. notifying Server... ")
+          println("update(s) detected. notifying Server... ")
+          println(updates)
           val msg = FileMessage(updates)
           writeObject(msg)
           println("done")
@@ -232,7 +285,8 @@ object Client {
       }
 
       if (!keyHashes.isEmpty) {
-        print("removed files detected. notifying Server... ")
+        println("removed files detected. notifying Server... ")
+        println(keyHashes)
         val msg = RemovedMessage(keyHashes)
         writeObject(msg)
         println("done")

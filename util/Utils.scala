@@ -67,6 +67,13 @@ object Utils {
     }
   }
 
+  // Detect if a directory is empty. Calling this function with on a file instead
+  // of a directory is an error.
+  def dirEmpty (dir: File) : Boolean = dir.list match {
+    case Array() => true
+    case _ => false
+  }
+
   // recursively walk a directory tree and apply the given function to each file
   // calling this function on a file is an error
   // TODO(jacob) if dir is deleted during this call bad things can happen
@@ -108,30 +115,27 @@ object Utils {
     }
   }
 
-  /* Find and return the highest deleted folder subpath in the given subpath.
-   * If no parent folder has been deleted the subpath itself is returned.
-   * Note that if nothing has been deleted the subpath will still be returned.
-   * This function is also not guranteed correct results if folders along the
-   * subpath are deleted during execution. If the home folder has been deleted
-   * this function will return the top folder contained within home. You can't
-   * go home again, but you can sure be in denial about it. */
-  def getDeleted (home: File, subpath: List[String]) : List[String] = {
-    
-    def loop (dir: File, path: List[String]) : List[String] = {
-      path match {
-        case Nil => getRelativePath(home)(dir)
-        case p::ps => {
-          val subdir = new File(dir, p)
-          if (!subdir.exists)
-            getRelativePath(home)(subdir)
-          else
-            loop(subdir, ps)
-        }
-      }
+  /* Search for the highest parent folder of the given file/folder that satisfies
+   * the given predicate. If no parent is found the given subpath will be returned.
+   * TODO(jacob) are we guranteed processing order with takeWhile? */
+  def findParent (home: File) (subpath: List[String]) (pred: File => Boolean) : List[String] = {
+    var sub = List[String]()
+    subpath.takeWhile { p =>
+      sub = sub :+ p
+      !pred(newFile(home, sub))
     }
 
-    loop(home, subpath)
+    sub
   }
+
+  /* Find and return the highest deleted folder subpath in the given subpath.
+   * If no parent folder has been deleted the subpath itself is returned.
+   * This function is not guranteed correct results if folders along the
+   * subpath are deleted during execution. If the home folder has been deleted
+   * this function will return the top folder contained within home. In other
+   * words, you can't go home again, but you can sure be in denial about it. */
+  def getDeleted (home: File, subpath: List[String]) : List[String] =
+    findParent(home)(subpath)(!_.exists)
 
   // find the relative path for a file. requires file to be contained within home
   def getRelativePath (home: File) (file: File) : List[String] = {
