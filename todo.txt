@@ -28,9 +28,3 @@ TODO:
 
 Design Questions:
 - what to do about clients connecting with additional files in their home folders?
-  currently they are ignored, although deletion will trigger a RemovedMessage
-
-Outstanding bugs:
-- possibly duplicating directories and the files they contain when Clients check for updates
-  (leading to ex.- adding both a new file and its new parent directory to the hash map)
-- deleting a non-empty directory does not behave correctly. this could be partially due to the above bug

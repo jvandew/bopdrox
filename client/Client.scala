@@ -101,6 +101,10 @@ object Client {
 
             case Some(hash) => file.delete
           }
+
+          val parent = file.getParentFile
+          if (Utils.dirEmpty(parent))
+            hashes.update(getRelPath(parent), None)
         }
 
         println("done")

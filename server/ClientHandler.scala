@@ -121,6 +121,10 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
 
             case Some(hash) => file.delete
           }
+
+          val parent = file.getParentFile
+          if (Utils.dirEmpty(parent))
+            Server.hashes.update(getRelPath(parent), None)
         }
       }
 
