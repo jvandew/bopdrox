@@ -7,7 +7,7 @@ package bopdrox.test
  * performance over an actual network. */
 object Test {
 
-  def def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit = {
     
   }
   

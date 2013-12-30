@@ -6,7 +6,20 @@ import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOut
 import java.net.Socket
 import scala.collection.mutable.{HashMap, Queue}
 
+// companion object for running a Client
 object Client {
+
+  /* Takes a home folder and the address of a running Server */
+  def main (args: Array[String]) : Unit = {
+    val home = new File(args(0))
+    val Array(host, port) = args(1).split(':')
+
+    val client = new Client(home)(host)(port.toInt)
+    client.run
+  }
+}
+
+class Client (home: File) (host: String) (port: Int) extends Runnable {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
@@ -15,18 +28,16 @@ object Client {
   // store received Messages for later consumption
   val messageQueue = new Queue[Message]
 
+  val getRelPath = Utils.getRelativePath(home)_
+
   // disconnect handler
-  // TODO(jacob) Client should try to reconnect, rather than simply terminate
-  // TODO(jacob) this should be visible only to Client and ClientListener
-  def disconnect (ioe: IOException) : Unit = {
+  private[client] def disconnect (ioe: IOException) : Unit = {
     println("disconnected from Server; exiting...")
     sys.exit
   }
 
   // note this method is not called asnchronously
-  private def matchMessage (home: File) (msg: Message) : Unit = {
-
-    val getRelPath = Utils.getRelativePath(home) _
+  private def matchMessage (msg: Message) : Unit = {
 
     msg match {
       case FileMessage(fileContents) => {
@@ -114,13 +125,7 @@ object Client {
     }
   }
 
-  /* Takes a home folder and the address of a running Server */
-  def main (args: Array[String]) : Unit = {
-    val home = new File(args(0))
-    val Array(host, port) = args(1).split(':')
-
-    val getRelPath = Utils.getRelativePath(home)_
-    val matchMsg = matchMessage(home)_
+  def run : Unit = {
 
     // generate file list and hashes
     print("hashing files... ")
@@ -133,7 +138,7 @@ object Client {
 
     println("done")
 
-    val serv = new Socket(host, port.toInt)
+    val serv = new Socket(host, port)
     val out = new ObjectOutputStream(serv.getOutputStream)
     val in = new ObjectInputStream(serv.getInputStream)
 
@@ -192,7 +197,7 @@ object Client {
     }
 
     // begin listener thread
-    new Thread(new ClientListener(in)(home)).start
+    new Thread(new ClientListener(this)(in)).start
 
     // main loop to check for updated files
     while (true) {
@@ -201,7 +206,7 @@ object Client {
       // TODO(jacob) this could be an inconvenient way of handling Messages if we have a
       // large Queue (unlikely with a single user) or a significantly large directory tree
       while (!messageQueue.isEmpty)
-        matchMsg(messageQueue.dequeue)
+        matchMessage(messageQueue.dequeue)
 
       var keySet = hashes.keySet
       var updates = List[(List[String], Option[FileMsgData])]()

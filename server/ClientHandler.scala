@@ -8,7 +8,9 @@ import scala.collection.mutable.{HashMap, HashSet}
 
 /* A ClientHandler is a Runnable object designed to handle all communications
  * with a Client */
-class ClientHandler (client: Socket) (home: File) extends Runnable {
+class ClientHandler (server: Server) (client: Socket) extends Runnable {
+
+  val home = server.home
 
   private val in = new ObjectInputStream(client.getInputStream)
   private val out = new ObjectOutputStream(client.getOutputStream)
@@ -21,11 +23,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
   // disconnect client and mark handler to terminate
   private def disconnect (ioe: IOException) : Unit = {
     println("disconnecting client: " + Utils.printSocket(client))
-
-    Server.synchronized {
-      Server.clients = Server.clients.diff(List(this))
-    }
-
+    server.dropClient(this)
     continue = false
   }
 
@@ -45,11 +43,11 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
           // empty directory
           case (subpath, None) => {
             println(subpath)
-            Server.hashes.synchronized {
+            server.hashes.synchronized {
               val emptyDir = Utils.newFile(home, subpath)
               if (emptyDir.exists) emptyDir.delete
               emptyDir.mkdirs
-              Server.hashes.update(subpath, None)
+              server.hashes.update(subpath, None)
             }
           }
 
@@ -58,14 +56,14 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
             println(subpath)
             val file = Utils.newFile(home, subpath)
 
-            Server.hashes.synchronized {
+            server.hashes.synchronized {
 
-              val chain = Server.hashes.get(subpath) match {
+              val chain = server.hashes.get(subpath) match {
                 case None => {  // new file
                   Utils.ensureDir(home, subpath)
-                  Utils.findParent(home)(subpath)(f => Server.hashes.contains(getRelPath(f))) match {
+                  Utils.findParent(home)(subpath)(f => server.hashes.contains(getRelPath(f))) match {
                     case `subpath` => ()  // no previously empty folder to remove
-                    case parent => Server.hashes.remove(parent)
+                    case parent => server.hashes.remove(parent)
                   }
                   Nil
                 }
@@ -79,7 +77,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
               }
 
               Utils.writeFile(file)(msgData.bytes)
-              Server.hashes.update(subpath, Some(ServerData(file.lastModified, msgData.newHash, chain)))
+              server.hashes.update(subpath, Some(ServerData(file.lastModified, msgData.newHash, chain)))
             }
           }
 
@@ -96,9 +94,9 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
         println(nameHash._1)
 
         // TODO(jacob) this synchronization is expensive...
-        Server.hashes.synchronized {
+        server.hashes.synchronized {
 
-          Server.hashes.remove(nameHash._1)
+          server.hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
           
           nameHash._2 match {
@@ -107,11 +105,11 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
               file.list match {
                 case Array() => file.delete // empty folder. nothing to see here
                 case _ => Utils.dirForeach(file) { delFile =>
-                  Server.hashes.remove(getRelPath(delFile))
+                  server.hashes.remove(getRelPath(delFile))
                   delFile.delete // would happen in dirDelete, but more efficient here
                 }
                 { delDir =>
-                  Server.hashes.remove(getRelPath(delDir))
+                  server.hashes.remove(getRelPath(delDir))
                   delDir.delete // would happen in dirDelete, but more efficient here
                 }
               }
@@ -124,7 +122,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
 
           val parent = file.getParentFile
           if (Utils.dirEmpty(parent))
-            Server.hashes.update(getRelPath(parent), None)
+            server.hashes.update(getRelPath(parent), None)
         }
       }
 
@@ -139,7 +137,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
     println("client connected: " + Utils.printSocket(client))
 
     // send client a list of file names and hashes; do not synchronize on read
-    val fhList = Server.hashes.toList.map {
+    val fhList = server.hashes.toList.map {
       _ match {
         case (subpath, None) => (subpath, None)
         case (subpath, Some(fileData)) => (subpath, Some(fileData.hash))
@@ -155,7 +153,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
       case Some(FileRequest(files)) => {
 
         val fileList = files.map { filename =>
-          Server.hashes(filename) match {
+          server.hashes(filename) match {
             case None => (filename, None)
             case Some(fileData) => {
               val bytes = Utils.readFile(home, filename)
@@ -183,7 +181,7 @@ class ClientHandler (client: Socket) (home: File) extends Runnable {
         case Some(msg: Message) => {
 
           // forward message
-          Server.clients.foreach { c =>
+          server.clients.foreach { c =>
             if (!c.equals(this))
               c.message(msg)
           }
