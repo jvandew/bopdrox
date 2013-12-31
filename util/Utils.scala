@@ -155,6 +155,9 @@ object Utils {
   // helper function to hash the contents of a file
   def hashFile (file: File) : Array[Byte] = contentsAndHash(file)._2
 
+  // check if the given File object is a file and is empty
+  def isEmptyFile (file: File) : Boolean = file.isFile && (file.length == 0)
+
   // join together a list of strings representing a file path
   def joinPath (path: List[String]) : String = path.reduce(_ + File.separator + _)
 
@@ -185,6 +188,16 @@ object Utils {
     bytes
   }
 
+  def readFileString (home: File, subpath: List[String]) : String =
+    readFileString(home, joinPath(subpath))
+
+  def readFileString (home: File, subpath: String) : String =
+    readFileString(new File(home, subpath))
+
+  // Note this function can produce unpredictable results when given
+  // a non-default character encoding
+  def readFileString (file: File) : String = new String(readFile(file))
+
   // split a file path string into a list of strings
   def splitPath (path: String) : List[String] =
     path.split(Pattern.quote(File.separator)).toList
@@ -199,5 +212,8 @@ object Utils {
     fileOut.write(bytes)
     fileOut.close
   }
+
+  // write a String to a file. May do weird things with non-default encodings
+  def writeFileString (file: File) (string: String) : Unit = writeFile(file)(string.getBytes)
 
 }

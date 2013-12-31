@@ -8,7 +8,7 @@ clean:
 	@-$(MAKE) clean -C server -s
 	@-$(MAKE) clean -C client -s
 	@-$(MAKE) clean -C test -s
-	
+
 msg:
 	@$(MAKE) msg -C msg --no-print-directory
 
@@ -21,5 +21,5 @@ server: msg util
 client: msg util
 	@$(MAKE) client -C client --no-print-directory
 
-test: server client
+test: util server client
 	@$(MAKE) test -C test --no-print-directory

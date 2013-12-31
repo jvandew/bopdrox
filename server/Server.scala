@@ -33,7 +33,7 @@ class Server (val home: File) (port: Int) extends Runnable {
     clients = clients.diff(List(client))
   }
 
-  def run: Unit = {
+  def run : Unit = {
 
     // generate file list and hashes
     print("hashing files... ")
