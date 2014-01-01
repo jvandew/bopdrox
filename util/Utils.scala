@@ -34,7 +34,7 @@ object Utils {
   /* Perfroms a write on some ObjectOutputStream, checking that the operation
    * succeeds while handling failure */
   def checkedWrite (handler: IOException => Unit) (out: ObjectOutputStream) (msg: Message) : Unit = {
-    try { 
+    try {
       out.writeObject(msg)
     } catch {
       case ioe: IOException => handler(ioe)
@@ -57,12 +57,12 @@ object Utils {
         val deletions = files.map { file =>
           if (file.isFile)
             file.delete
-          else {
+          else
             dirDelete(file)
-            dir.delete
-          }
         }
-        deletions.reduce(_ && _)
+
+        dir.delete && deletions.reduce(_ && _)
+
       }
     }
   }
@@ -81,7 +81,7 @@ object Utils {
     Option(dir.listFiles) match {
       case None =>
         throw new IOException("Error while processing directory")
-      
+
       case Some(Array()) => empty(dir)
 
       case Some(files) => {

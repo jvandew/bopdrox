@@ -19,19 +19,23 @@ object Server {
 
 class Server (val home: File) (port: Int) extends Runnable {
 
-  val getRelPath = Utils.getRelativePath(home)_
+  private var open = false
 
-  // store file hashes of the most recent version
-  // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[List[String], Option[ServerData]]
+  val getRelPath = Utils.getRelativePath(home)_
 
   // store a list of all connected clients
   // note since this is a var we sychronize on Server instead of clients directly
   var clients = List[ClientHandler]()
 
+  // store file hashes of the most recent version
+  // TODO(jacob) include version vectors at some point
+  val hashes = new HashMap[List[String], Option[ServerData]]
+
   def dropClient (client: ClientHandler): Unit = this.synchronized {
     clients = clients.diff(List(client))
   }
+
+  def isOpen : Boolean = open
 
   def run : Unit = {
 
@@ -48,6 +52,7 @@ class Server (val home: File) (port: Int) extends Runnable {
     println("done")
 
     val serv = new ServerSocket(port)
+    open = true
 
     // main listen loop
     println("listening for connections")
@@ -56,7 +61,7 @@ class Server (val home: File) (port: Int) extends Runnable {
       val handler = new ClientHandler(this)(client)
 
       this.synchronized {
-        clients = handler::clients 
+        clients = handler::clients
       }
 
       new Thread(handler).start

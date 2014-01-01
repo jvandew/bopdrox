@@ -25,16 +25,20 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
   // TODO(jacob) include version vectors at some point
   val hashes = new HashMap[List[String], Option[ClientData]]
 
+  val getRelPath = Utils.getRelativePath(home)_
+
   // store received Messages for later consumption
   val messageQueue = new Queue[Message]
 
-  val getRelPath = Utils.getRelativePath(home)_
+  private var open = false
 
   // disconnect handler
   private[client] def disconnect (ioe: IOException) : Unit = {
     println("disconnected from Server; exiting...")
     sys.exit
   }
+
+  def isOpen : Boolean = open
 
   // note this method is not called asnchronously
   private def matchMessage (msg: Message) : Unit = {
@@ -91,7 +95,7 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
 
           hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
-          
+
           nameHash._2 match {
             case None => {
 
@@ -198,6 +202,7 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
 
     // begin listener thread
     new Thread(new ClientListener(this)(in)).start
+    open = true
 
     // main loop to check for updated files
     while (true) {

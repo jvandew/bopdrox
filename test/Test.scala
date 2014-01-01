@@ -1,8 +1,11 @@
 package bopdrox.test
 
+import bopdrox.client.{Client, ClientData}
+import bopdrox.server.{Server, ServerData}
 import bopdrox.util.Utils
 import java.io.{File, FileOutputStream}
 import java.util.Date
+import scala.collection.mutable.HashMap
 
 /* A simple test framework for Bopdrox. Creates several test directories and spawns
  * a Server and several Clients to test some basic operations. The results of each
@@ -64,10 +67,10 @@ object Test {
     file4out.write("I'm a looooooooooooooooooooooooooooooooooooooooooo\n".getBytes)
     var lineCount = 0
 
-    // TODO(jacob) this runs in quadratic time with respect to the number of lines
+    // TODO(jacob) this could probably be further optimized in some way
     while (lineCount < 100000) {
-      file4out.write("oooooooooooooooooooooooooooooooooooooooooooooooooo\n".getBytes)
-      lineCount += 1
+      file4out.write("oooooooooooooooooooooooooooooooooooooooooooooooooo\noooooooooooooooooooooooooooooooooooooooooooooooooo\n".getBytes)
+      lineCount += 2
     }
     file4out.write("oooooooooooooooooooooooooooooooooooooooooong test\n".getBytes)
   }
@@ -89,15 +92,64 @@ object Test {
     serverDir
   }
 
+  // TODO(jacob) clean up is still very messy...
+  def cleanUp (serverDir: File) (clientDirs: List[File]) : Unit = {
+    clientDirs.foreach(Utils.dirDelete(_))
+    Utils.dirDelete(serverDir)
+
+    sys.exit
+  }
+
+  def hashmapEquals (servMap: HashMap[List[String], Option[ServerData]])
+                    (clntMap: HashMap[List[String], Option[ClientData]]) : Boolean = {
+
+    // if keys do not match we can simply return false
+    if (!servMap.keys.equals(clntMap.keys))
+      false
+    else {
+
+      val matches = servMap.keys.map { key =>
+        (servMap(key), clntMap(key)) match {
+          case (None, None) => true
+          case (Some(servData), Some(clntData)) =>
+            servData.hash.zip(clntData.hash).forall(bs => bs._1 == bs._2)
+          case _ => false
+        }
+      }
+
+      matches.reduce((m1, m2) => m1 && m2)
+
+    }
+  }
+
   def main(args: Array[String]) : Unit = {
 
     val timeStr = (new Date).getTime.toString
 
     val serverDir = buildTestDir(timeStr)
+    val server = new Server(serverDir)(9000)
+    val serverThread = new Thread(server)
+    serverThread.start
+
     val clientDirs = List(new File("client1_test_dir_" + timeStr),
                           new File("client2_test_dir_" + timeStr),
                           new File("client3_test_dir_" + timeStr))
     clientDirs.foreach(_.mkdir)
+    val clients = clientDirs.map(new Client(_)("localhost")(9000))
+    val clientThreads = clients.map(new Thread(_))
+
+    while (!server.isOpen) Thread.sleep(100)
+
+    clientThreads.foreach(_.start)
+
+    while (!clients.map(_.isOpen).reduce((c1, c2) => c1 && c2)) Thread.sleep(100)
+
+    print("Verifying Client-Server hashmap consistency... ")
+    assert(clients.map(c => hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2),
+           cleanUp(serverDir)(clientDirs))
+    println("done")
+
+    cleanUp(serverDir)(clientDirs)
 
   }
 
