@@ -1,9 +1,9 @@
 package bopdrox.test
 
-import bopdrox.client.{Client, ClientData}
-import bopdrox.server.{Server, ServerData}
+import bopdrox.client.Client
+import bopdrox.server.Server
 import bopdrox.util.Utils
-import java.io.{File, FileOutputStream}
+import java.io.File
 import java.util.Date
 import scala.collection.mutable.HashMap
 
@@ -14,65 +14,39 @@ import scala.collection.mutable.HashMap
  * performance over an actual network. */
 object Test {
 
-  private def buildEmptyDirs (serverDir: File) : Unit = {
-    val emptyDir1 = new File(serverDir, "empty_dir")
-    emptyDir1.mkdir
+  val emptyDirs = List(
+      List("empty_dir"),
+      List("nested", "nested", "nested", "empty_dir"))
 
-    val emptyDir2Path = Utils.joinPath(List("nested", "nested", "nested", "empty_dir"))
-    val emptyDir2 = new File(serverDir, emptyDir2Path)
-    emptyDir2.mkdir
-  }
+  val emptyFiles = List(
+      List("empty.test"),
+      List("nested", "empty.test"),
+      List("nested", "nested", "nested", "empty"))
 
-  private def buildEmptyFiles (serverDir: File) : Unit = {
-    val emptyFile1 = new File(serverDir, "empty.test")
-    emptyFile1.createNewFile
-    if (!Utils.isEmptyFile(emptyFile1)) Utils.writeFileString(emptyFile1)("")
+  val nonEmptyFiles = List(
+      List("test"),
+      List("test2"),
+      List("nested", "testFile"),
+      List("nested", "nested", "nested", "test"))
 
-    val emptyFile2Path = Utils.joinPath(List("nested", "empty.test"))
-    val emptyFile2 = new File(serverDir, emptyFile2Path)
-    emptyFile2.createNewFile
-    if (!Utils.isEmptyFile(emptyFile2)) Utils.writeFileString(emptyFile2)("")
+  val allFileSubpaths = List(emptyDirs, emptyFiles, nonEmptyFiles).flatten
 
-    val emptyFile3Path = Utils.joinPath(List("nested", "nested", "nested", "empty"))
-    val emptyFile3 = new File(serverDir, emptyFile3Path)
-    emptyFile3.createNewFile
-    if (!Utils.isEmptyFile(emptyFile3)) Utils.writeFileString(emptyFile3)("")
-  }
+  // TODO(jacob) figure out how to define an implicit ordering on List[String]
+  val allFiles = allFileSubpaths.map(Utils.joinPath(_)).sorted
 
-  private def buildNestedDirs (serverDir: File) : Unit = {
-    val nestedsPath = Utils.joinPath(List("nested", "nested", "nested"))
-    val nesteds = new File(serverDir, nestedsPath)
-    nesteds.mkdirs
-  }
+  private def buildEmptyDirs (serverDir: File) : Unit =
+    emptyDirs.foreach(TestUtils.createNewDir(serverDir, _))
+
+  private def buildEmptyFiles (serverDir: File) : Unit =
+    emptyFiles.foreach(TestUtils.createNewFile(serverDir, _))
 
   private def buildNonEmptyFiles (serverDir: File) : Unit = {
-    val file1 = new File(serverDir, "test")
-    file1.createNewFile
-    Utils.writeFileString(file1)("this is a test\n\n")
+    TestUtils.createNewFile(serverDir, List("test"), "this is a test\n\n")
+    TestUtils.createNewFile(serverDir, List("test2"), "this is a test\n\n")
+    TestUtils.createNewFile(serverDir, List("nested", "testFile"), "\nI'm\n\talso\n a \n test!\n\n")
 
-    val file2 = new File(serverDir, "test2")
-    file2.createNewFile
-    Utils.writeFileString(file2)("this is a test\n\n")
-
-    val file3Path = Utils.joinPath(List("nested", "testFile"))
-    val file3 = new File(serverDir, file3Path)
-    file3.createNewFile
-    Utils.writeFileString(file3)("\nI'm\n\talso\n a \n test!\n\n")
-
-    val file4Path = Utils.joinPath(List("nested", "nested", "nested", "test"))
-    val file4 = new File(serverDir, file4Path)
-    file4.createNewFile
-
-    val file4out = new FileOutputStream(file4)
-    file4out.write("I'm a looooooooooooooooooooooooooooooooooooooooooo\n".getBytes)
-    var lineCount = 0
-
-    // TODO(jacob) this could probably be further optimized in some way
-    while (lineCount < 100000) {
-      file4out.write("oooooooooooooooooooooooooooooooooooooooooooooooooo\noooooooooooooooooooooooooooooooooooooooooooooooooo\n".getBytes)
-      lineCount += 2
-    }
-    file4out.write("oooooooooooooooooooooooooooooooooooooooooong test\n".getBytes)
+    val longText = new String(Array.tabulate(1000000)(n => 'a'))
+    TestUtils.createNewFile(serverDir, List("nested", "nested", "nested", "test"), longText)
   }
 
   private def buildServerDir (timeStr: String) : File = {
@@ -84,7 +58,6 @@ object Test {
   def buildTestDir (timeStr: String) : File = {
     val serverDir = buildServerDir(timeStr)
 
-    buildNestedDirs(serverDir)
     buildEmptyDirs(serverDir)
     buildEmptyFiles(serverDir)
     buildNonEmptyFiles(serverDir)
@@ -92,38 +65,30 @@ object Test {
     serverDir
   }
 
-  // TODO(jacob) clean up is still very messy...
-  def cleanUp (serverDir: File) (clientDirs: List[File]) : Unit = {
-    clientDirs.foreach(Utils.dirDelete(_))
-    Utils.dirDelete(serverDir)
+  def verifyFiles (serverDir: File, clientDirs: List[File]) (file1: File) (file2: File) : Unit = {
+    print("Verifying the contents of " + file1.getCanonicalPath + " and " + file2.getCanonicalPath + "... ")
 
-    sys.exit
+    assert(Utils.verifyBytes(Utils.readFile(file1))(Utils.readFile(file2)),
+          {println("ERROR!") ; TestUtils.cleanUp(serverDir)(clientDirs)})
+
+    println("done")
   }
 
-  def hashmapEquals (servMap: HashMap[List[String], Option[ServerData]])
-                    (clntMap: HashMap[List[String], Option[ClientData]]) : Boolean = {
+  def verifyHashMaps (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
+    print("Verifying Client-Server hashmap consistency... ")
 
-    // if keys do not match we can simply return false
-    if (!servMap.keys.equals(clntMap.keys))
-      false
-    else {
+    assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles,
+          {println("ERROR!\nNot all files added to Server hashmap") ; TestUtils.cleanUp(serverDir)(clientDirs)})
+    assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2),
+          {println("ERROR!\nClient-Server mismatch") ; TestUtils.cleanUp(serverDir)(clientDirs)})
 
-      val matches = servMap.keys.map { key =>
-        (servMap(key), clntMap(key)) match {
-          case (None, None) => true
-          case (Some(servData), Some(clntData)) =>
-            servData.hash.zip(clntData.hash).forall(bs => bs._1 == bs._2)
-          case _ => false
-        }
-      }
-
-      matches.reduce((m1, m2) => m1 && m2)
-
-    }
+    println("done")
   }
 
+  // currently runs with no arguments
   def main(args: Array[String]) : Unit = {
 
+    // give each run a unique timestamp
     val timeStr = (new Date).getTime.toString
 
     val serverDir = buildTestDir(timeStr)
@@ -138,19 +103,22 @@ object Test {
     val clients = clientDirs.map(new Client(_)("localhost")(9000))
     val clientThreads = clients.map(new Thread(_))
 
+    val checkFiles = verifyFiles(serverDir, clientDirs) _
+    val checkMaps = verifyHashMaps(serverDir, clientDirs) _
+
     while (!server.isOpen) Thread.sleep(100)
 
     clientThreads.foreach(_.start)
 
     while (!clients.map(_.isOpen).reduce((c1, c2) => c1 && c2)) Thread.sleep(100)
 
-    print("Verifying Client-Server hashmap consistency... ")
-    assert(clients.map(c => hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2),
-           cleanUp(serverDir)(clientDirs))
-    println("done")
+    // verify hashmaps have been built correctly
+    checkMaps(server)(clients)
 
-    cleanUp(serverDir)(clientDirs)
 
+
+
+    TestUtils.cleanUp(serverDir)(clientDirs)
   }
 
 }

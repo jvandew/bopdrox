@@ -188,22 +188,12 @@ object Utils {
     bytes
   }
 
-  def readFileString (home: File, subpath: List[String]) : String =
-    readFileString(home, joinPath(subpath))
-
-  def readFileString (home: File, subpath: String) : String =
-    readFileString(new File(home, subpath))
-
-  // Note this function can produce unpredictable results when given
-  // a non-default character encoding
-  def readFileString (file: File) : String = new String(readFile(file))
-
   // split a file path string into a list of strings
   def splitPath (path: String) : List[String] =
     path.split(Pattern.quote(File.separator)).toList
 
-  // check whether or not two hashes match
-  def verifyHash (hash1: Array[Byte])(hash2: Array[Byte]) =
+  // check whether or not two byte arrays match
+  def verifyBytes (hash1: Array[Byte])(hash2: Array[Byte]) =
     hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
 
   // write data to a file
@@ -212,8 +202,5 @@ object Utils {
     fileOut.write(bytes)
     fileOut.close
   }
-
-  // write a String to a file. May do weird things with non-default encodings
-  def writeFileString (file: File) (string: String) : Unit = writeFile(file)(string.getBytes)
 
 }

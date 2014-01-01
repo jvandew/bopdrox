@@ -162,7 +162,7 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
             case (Some(None), None) => false  // folders match
             case (Some(None), Some(_)) => true  // folder on client is now file on server
             case (Some(Some(_)), None) => true  // file on client is now folder on server
-            case (Some(Some(ClientData(_, hash1))), Some(hash2)) => !Utils.verifyHash(hash1)(hash2)
+            case (Some(Some(ClientData(_, hash1))), Some(hash2)) => !Utils.verifyBytes(hash1)(hash2)
           }
         )
         val msg = FileRequest(filtered.map(_._1))
