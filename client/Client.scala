@@ -291,7 +291,6 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
         case Nil => ()  // no updates
         case _ => {
           println("update(s) detected. notifying Server... ")
-          println(updates)
           val msg = FileMessage(updates)
           writeObject(msg)
           println("done")
@@ -306,7 +305,7 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
         println("done")
       }
 
-      Thread.sleep(1000)
+      Thread.sleep(500)
     }
 
   }

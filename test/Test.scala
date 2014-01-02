@@ -14,6 +14,23 @@ import scala.collection.mutable.HashMap
  * performance over an actual network. */
 object Test {
 
+  /*  Folder hierarchy:
+   *
+   *  + test_dir
+   *    + nested
+   *      + nested
+   *        + nested
+   *          + empty_dir
+   *          - empty
+   *          - test
+   *      - empty.test
+   *      - testFile
+   *    + empty_dir
+   *    - empty.test
+   *    - test
+   *    - test2
+   */
+
   val emptyDirs = List(
       List("empty_dir"),
       List("nested", "nested", "nested", "empty_dir"))
@@ -29,10 +46,10 @@ object Test {
       List("nested", "testFile"),
       List("nested", "nested", "nested", "test"))
 
-  val allFileSubpaths = List(emptyDirs, emptyFiles, nonEmptyFiles).flatten
+  var allFileSubpaths = List(emptyDirs, emptyFiles, nonEmptyFiles).flatten
 
   // TODO(jacob) figure out how to define an implicit ordering on List[String]
-  val allFiles = allFileSubpaths.map(Utils.joinPath(_)).sorted
+  def allFiles : List[String] = allFileSubpaths.map(Utils.joinPath(_)).sorted
 
   private def buildEmptyDirs (serverDir: File) : Unit =
     emptyDirs.foreach(TestUtils.createNewDir(serverDir, _))
@@ -65,6 +82,21 @@ object Test {
     serverDir
   }
 
+  // shortcut to create a new file and add it for tracking
+  def createAndTrack (home: File, subpath: List[String]) : Unit = {
+    TestUtils.createNewFile(home, subpath)
+    track(subpath)
+  }
+
+  // update the list of tracked files/folders to include a new subpath
+  def track (subpath: List[String]) : Unit =
+    allFileSubpaths = subpath :: allFileSubpaths.diff(List(subpath.dropRight(1)))
+
+  // remove a subpath from the list of tracked files/folders
+  // TODO(jacob) newly empty directories will need to be tracked manually
+  def untrack (subpath: List[String]) : Unit =
+    allFileSubpaths = allFileSubpaths.diff(List(subpath))
+
   def verifyFiles (serverDir: File, clientDirs: List[File]) (file1: File) (file2: File) : Unit = {
     print("Verifying the contents of " + file1.getCanonicalPath + " and " + file2.getCanonicalPath + "... ")
 
@@ -78,7 +110,7 @@ object Test {
     print("Verifying Client-Server hashmap consistency... ")
 
     assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles,
-          {println("ERROR!\nNot all files added to Server hashmap") ; TestUtils.cleanUp(serverDir)(clientDirs)})
+          {println("ERROR!\nServer hashmap does not match reference") ; println(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted); println(allFiles); TestUtils.cleanUp(serverDir)(clientDirs)})
     assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2),
           {println("ERROR!\nClient-Server mismatch") ; TestUtils.cleanUp(serverDir)(clientDirs)})
 
@@ -115,7 +147,39 @@ object Test {
     // verify hashmaps have been built correctly
     checkMaps(server)(clients)
 
+  /*  Folder hierarchy:
+   *
+   *  + test_dir
+   *    + nested
+   *      + nested
+   *        + nested
+   *          + empty_dir
+   *          - empty
+   *          - test
+   *      - empty.test
+   *      - testFile
+   *    + empty_dir
+   *    - empty.test
+   *    - test
+   *    - test2
+   */
 
+    // File creation tests on a single client
+    createAndTrack(clientDirs(0), List("new_file1"))
+    createAndTrack(clientDirs(0), List("new_file2"))
+    createAndTrack(clientDirs(0), List("new_file3"))
+    createAndTrack(clientDirs(0), List("empty_dir", "test"))
+    untrack(List("empty_dir"))
+    createAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))
+    createAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    untrack(List("nested", "nested", "nested", "empty_dir"))
+    createAndTrack(clientDirs(0), List("nested", "nested", "new_file"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
 
 
     TestUtils.cleanUp(serverDir)(clientDirs)

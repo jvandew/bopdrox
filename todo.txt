@@ -28,3 +28,8 @@ TODO:
 
 Design Questions:
 - what to do about clients connecting with additional files in their home folders?
+- move from hashmaps to tries for metadata storage? a trie would certainly
+be a more intuitive representation of the filesystem tree, however for most
+usage we will probably be storing many more files than directories, meaning
+a switch would likely not cause an appreciable efficiency increase (other than
+a potentially lower memory footprint)
