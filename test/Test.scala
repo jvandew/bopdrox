@@ -88,14 +88,23 @@ object Test {
     track(subpath)
   }
 
+  // shortcut to delete and untrack a file/folder
+  def deleteAndUntrack (home: File, subpath: List[String]) : Unit = {
+    Utils.dirDelete(Utils.newFile(home, subpath))
+    untrack(subpath)
+  }
+
   // update the list of tracked files/folders to include a new subpath
   def track (subpath: List[String]) : Unit =
     allFileSubpaths = subpath :: allFileSubpaths.diff(List(subpath.dropRight(1)))
 
   // remove a subpath from the list of tracked files/folders
-  // TODO(jacob) newly empty directories will need to be tracked manually
-  def untrack (subpath: List[String]) : Unit =
+  def untrack (subpath: List[String]) : Unit = {
+    val parent = subpath.dropRight(1)
     allFileSubpaths = allFileSubpaths.diff(List(subpath))
+    if (allFileSubpaths.forall(!Utils.listStartsWith(_)(parent)))
+      allFileSubpaths = parent::allFileSubpaths
+  }
 
   def verifyFiles (serverDir: File, clientDirs: List[File]) (file1: File) (file2: File) : Unit = {
     print("Verifying the contents of " + file1.getCanonicalPath + " and " + file2.getCanonicalPath + "... ")
@@ -147,32 +156,31 @@ object Test {
     // verify hashmaps have been built correctly
     checkMaps(server)(clients)
 
-  /*  Folder hierarchy:
-   *
-   *  + test_dir
-   *    + nested
-   *      + nested
-   *        + nested
-   *          + empty_dir
-   *          - empty
-   *          - test
-   *      - empty.test
-   *      - testFile
-   *    + empty_dir
-   *    - empty.test
-   *    - test
-   *    - test2
-   */
+    /*  Folder hierarchy:
+     *
+     *  + test_dir
+     *    + nested
+     *      + nested
+     *        + nested
+     *          + empty_dir
+     *          - empty
+     *          - test
+     *      - empty.test
+     *      - testFile
+     *    + empty_dir
+     *    - empty.test
+     *    - test
+     *    - test2
+     */
 
-    // File creation tests on a single client
+    println("Testing single client file creation...")
+
     createAndTrack(clientDirs(0), List("new_file1"))
     createAndTrack(clientDirs(0), List("new_file2"))
     createAndTrack(clientDirs(0), List("new_file3"))
     createAndTrack(clientDirs(0), List("empty_dir", "test"))
-    untrack(List("empty_dir"))
     createAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))
     createAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    untrack(List("nested", "nested", "nested", "empty_dir"))
     createAndTrack(clientDirs(0), List("nested", "nested", "new_file"))
 
     // triple filesystem scanning interval is a reasonable requirement
@@ -180,6 +188,54 @@ object Test {
     Thread.sleep(1500)
 
     checkMaps(server)(clients)
+
+    println("Testing single client file deletion...")
+
+    deleteAndUntrack(clientDirs(1), List("new_file1"))
+    deleteAndUntrack(clientDirs(1), List("new_file2"))
+    deleteAndUntrack(clientDirs(1), List("new_file3"))
+    deleteAndUntrack(clientDirs(1), List("empty_dir", "test"))
+    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "test2"))
+    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    deleteAndUntrack(clientDirs(1), List("nested", "nested", "new_file"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    println("Testing multiple client file creation...")
+
+    createAndTrack(clientDirs(0), List("new_file1"))
+    createAndTrack(clientDirs(1), List("new_file2"))
+    createAndTrack(clientDirs(2), List("new_file3"))
+    createAndTrack(clientDirs(2), List("empty_dir", "test"))
+    createAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))
+    createAndTrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    createAndTrack(clientDirs(1), List("nested", "nested", "new_file"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    // println("Testing multiple client file deletion...")
+
+    // deleteAndUntrack(clientDirs(1), List("new_file1"))
+    // deleteAndUntrack(clientDirs(2), List("new_file2"))
+    // deleteAndUntrack(clientDirs(0), List("new_file3"))
+    // deleteAndUntrack(clientDirs(1), List("empty_dir", "test"))
+    // deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "test2"))
+    // deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    // deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
+
+    // // triple filesystem scanning interval is a reasonable requirement
+    // // (2*500) potentially for each Client plus an extra 500ms for overhead
+    // Thread.sleep(1500)
+
+    // checkMaps(server)(clients)
 
 
     TestUtils.cleanUp(serverDir)(clientDirs)

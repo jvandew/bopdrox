@@ -41,19 +41,15 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
       fileContents.foreach {
         _ match {
           // empty directory
-          case (subpath, None) => {
-            println(subpath)
-            server.hashes.synchronized {
-              val emptyDir = Utils.newFile(home, subpath)
-              if (emptyDir.exists) emptyDir.delete
-              emptyDir.mkdirs
-              server.hashes.update(subpath, None)
-            }
+          case (subpath, None) => server.hashes.synchronized {
+            val emptyDir = Utils.newFile(home, subpath)
+            if (emptyDir.exists) emptyDir.delete
+            emptyDir.mkdirs
+            server.hashes.update(subpath, None)
           }
 
           // normal file
           case (subpath, Some(msgData)) => {
-            println(subpath)
             val file = Utils.newFile(home, subpath)
 
             server.hashes.synchronized {
@@ -91,14 +87,13 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
       println("handling RemovedMessage... ")
 
       fileMap.foreach { nameHash =>
-        println(nameHash._1)
 
         // TODO(jacob) this synchronization is expensive...
         server.hashes.synchronized {
 
           server.hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
-          
+
           nameHash._2 match {
             case None => {
 

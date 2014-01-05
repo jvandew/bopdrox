@@ -161,6 +161,13 @@ object Utils {
   // join together a list of strings representing a file path
   def joinPath (path: List[String]) : String = path.reduce(_ + File.separator + _)
 
+  // is this a prefix of the given list?
+  def listStartsWith[T] (list: List[T]) (prefix: List[T]) : Boolean = (list, prefix) match {
+    case (_, Nil) => true
+    case (Nil, _) => false
+    case (e1::list2, e2::prefix2) => (e1 equals e2) && listStartsWith(list2)(prefix2)
+  }
+
   // shortcut method to create a File object using our List subpath format
   def newFile (home: File, subpath: List[String]) : File = {
     subpath match {

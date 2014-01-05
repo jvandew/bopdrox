@@ -34,6 +34,7 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
 
   // disconnect handler
   private[client] def disconnect (ioe: IOException) : Unit = {
+    println(ioe)
     println("disconnected from Server; exiting...")
     sys.exit
   }
@@ -52,7 +53,6 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
           _ match {
             // empty directory
             case (subpath, None) => {
-              println(subpath)
               val emptyDir = Utils.newFile(home, subpath)
               if (emptyDir.exists) emptyDir.delete
               emptyDir.mkdirs
@@ -62,7 +62,6 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
 
             // normal file
             case (subpath, Some(msgData)) => {
-              println(subpath)
               val file = Utils.newFile(home, subpath)
 
               hashes.get(subpath) match {
@@ -91,8 +90,6 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
         println("handling RemovedMessage... ")
 
         fileMap.foreach { nameHash =>
-          println(nameHash._1)
-
           hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
 
@@ -299,7 +296,6 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
 
       if (!keyHashes.isEmpty) {
         println("removed files detected. notifying Server... ")
-        println(keyHashes)
         val msg = RemovedMessage(keyHashes)
         writeObject(msg)
         println("done")

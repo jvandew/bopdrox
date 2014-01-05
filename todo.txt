@@ -18,6 +18,7 @@ For Deployment:
   - from Server's perspective, Client reconnection and connection should look identical
 
 TODO:
+- debug mode to log operations rather than printing a summary
 - check hash on a client's files upon connection to the server
 - implement version vectors for already-connected clients
 - file level locking instead of hash map level lockings
