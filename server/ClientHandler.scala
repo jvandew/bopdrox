@@ -22,7 +22,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   // disconnect client and mark handler to terminate
   private def disconnect (ioe: IOException) : Unit = {
-    println("disconnecting client: " + Utils.printSocket(client))
+    println("disconnecting client: ")
     server.dropClient(this)
     continue = false
   }
@@ -84,7 +84,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     }
 
     case RemovedMessage(fileMap) => {
-      println("handling RemovedMessage... ")
+      println("handling RemovedMessage... " )
 
       fileMap.foreach { nameHash =>
 
@@ -176,9 +176,11 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
         case Some(msg: Message) => {
 
           // forward message
-          server.clients.foreach { c =>
-            if (!c.equals(this))
-              c.message(msg)
+          server.synchronized {
+            server.clients.foreach { c =>
+              if (!c.equals(this))
+                c.message(msg)
+            }
           }
 
           matchMessage(msg)

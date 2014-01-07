@@ -77,21 +77,27 @@ object Utils {
   // recursively walk a directory tree and apply the given function to each file
   // calling this function on a file is an error
   // TODO(jacob) if dir is deleted during this call bad things can happen
+  // currently any resulting IOExceptions are just swallowed
   def dirForeach (dir: File) (proc: File => Unit) (empty: File => Unit) : Unit = {
-    Option(dir.listFiles) match {
-      case None =>
-        throw new IOException("Error while processing directory")
+    try {
+      Option(dir.listFiles) match {
+        case None =>
+          throw new IOException("Error while processing directory")
 
-      case Some(Array()) => empty(dir)
+        case Some(Array()) => empty(dir)
 
-      case Some(files) => {
-        files.foreach { file =>
-          if (file.isFile)
-            proc(file)
-          else
-            dirForeach(file)(proc)(empty)
+        case Some(files) => {
+          files.foreach { file =>
+            if (file.isFile)
+              proc(file)
+            else
+              dirForeach(file)(proc)(empty)
+          }
         }
       }
+    }
+    catch {
+      case ioe: IOException => ()  // nothing to see here...
     }
   }
 
@@ -175,6 +181,10 @@ object Utils {
       case path => new File(home, joinPath(path))
     }
   }
+
+  // a nice way to print out the local host:port from a socket
+  def printLocalSocket (sock: Socket) : String =
+    sock.getLocalAddress.getHostName + ":" + sock.getLocalPort
 
   // a nice way to print out the standard host:port from a socket
   def printSocket (sock: Socket) : String =

@@ -19,7 +19,7 @@ object Client {
   }
 }
 
-class Client (home: File) (host: String) (port: Int) extends Runnable {
+class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
@@ -34,10 +34,11 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
 
   // disconnect handler
   private[client] def disconnect (ioe: IOException) : Unit = {
-    println(ioe)
     println("disconnected from Server; exiting...")
     sys.exit
   }
+
+  var sock: Socket = null
 
   def isOpen : Boolean = open
 
@@ -51,12 +52,12 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
         // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
         fileContents.foreach {
           _ match {
+
             // empty directory
             case (subpath, None) => {
               val emptyDir = Utils.newFile(home, subpath)
               if (emptyDir.exists) emptyDir.delete
               emptyDir.mkdirs
-              println("added to map: " + subpath)
               hashes.update(subpath, None)
             }
 
@@ -140,6 +141,7 @@ class Client (home: File) (host: String) (port: Int) extends Runnable {
     println("done")
 
     val serv = new Socket(host, port)
+    sock = serv
     val out = new ObjectOutputStream(serv.getOutputStream)
     val in = new ObjectInputStream(serv.getInputStream)
 

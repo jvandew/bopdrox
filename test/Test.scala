@@ -221,22 +221,21 @@ object Test {
 
     checkMaps(server)(clients)
 
-    // println("Testing multiple client file deletion...")
+    println("Testing multiple client file deletion...")
 
-    // deleteAndUntrack(clientDirs(1), List("new_file1"))
-    // deleteAndUntrack(clientDirs(2), List("new_file2"))
-    // deleteAndUntrack(clientDirs(0), List("new_file3"))
-    // deleteAndUntrack(clientDirs(1), List("empty_dir", "test"))
-    // deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "test2"))
-    // deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    // deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
+    deleteAndUntrack(clientDirs(1), List("new_file1"))
+    deleteAndUntrack(clientDirs(2), List("new_file2"))
+    deleteAndUntrack(clientDirs(0), List("new_file3"))
+    deleteAndUntrack(clientDirs(1), List("empty_dir", "test"))
+    deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "test2"))
+    deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
 
-    // // triple filesystem scanning interval is a reasonable requirement
-    // // (2*500) potentially for each Client plus an extra 500ms for overhead
-    // Thread.sleep(1500)
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
 
-    // checkMaps(server)(clients)
-
+    checkMaps(server)(clients)
 
     TestUtils.cleanUp(serverDir)(clientDirs)
   }
