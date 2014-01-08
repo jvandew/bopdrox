@@ -53,6 +53,41 @@ object TestUtils {
     }
   }
 
+  // convert a hash in byte array format to a printable hex string
+  def hexHash (hash: Array[Byte]) : String = {
+    val hexArr = hash.map { b =>
+      val hex = b.toInt.toHexString
+      ("00" + hex).substring(hex.length)
+    }
+    hexArr.reduce((h1, h2) => h1 + h2)
+  }
+
+  // TODO(jacob) create an overarching MapData type so duplicating this function is unnecessary
+  def printClientMap (map: HashMap[List[String], Option[ClientData]]) : Unit = {
+    println("Begin Client map:")
+    map.keys.foreach { key =>
+      map(key) match {
+        case None => println(Utils.joinPath(key) + ": None")
+        case Some(data) => println(Utils.joinPath(key) + ": " + hexHash(data.hash).substring(0, 16))
+      }
+    }
+
+    print("\n")
+  }
+
+  // TODO(jacob) create an overarching MapData type so duplicating this function is unnecessary
+  def printServerMap (map: HashMap[List[String], Option[ServerData]]) : Unit = {
+    println("Begin Server map:")
+    map.keys.foreach { key =>
+      map(key) match {
+        case None => println(Utils.joinPath(key) + ": None")
+        case Some(data) => println(Utils.joinPath(key) + ": " + hexHash(data.hash).substring(0, 16))
+      }
+    }
+
+    print("\n")
+  }
+
   def readFileString (home: File, subpath: List[String]) : String =
     readFileString(home, Utils.joinPath(subpath))
 

@@ -3,7 +3,7 @@ package bopdrox.test
 import bopdrox.client.Client
 import bopdrox.server.Server
 import bopdrox.util.Utils
-import java.io.File
+import java.io.{File, FileOutputStream}
 import java.util.Date
 import scala.collection.mutable.HashMap
 
@@ -88,10 +88,38 @@ object Test {
     track(subpath)
   }
 
+  // shortcut to create a new file and erase and write strings to it multiple times
+  def createWriteAndTrack (home: File, subpath: List[String]) (strings: List[String]) : Unit = {
+    def recurse (file: File, strs: List[String]) : Unit = strs match {
+      case Nil => track(subpath)
+      case s::ss => {
+        TestUtils.writeFileString(file)(s)
+        recurse(file, ss)
+      }
+    }
+
+    val file = Utils.newFile(home, subpath)
+    file.createNewFile
+    recurse(file, strings)
+  }
+
   // shortcut to delete and untrack a file/folder
   def deleteAndUntrack (home: File, subpath: List[String]) : Unit = {
     Utils.dirDelete(Utils.newFile(home, subpath))
     untrack(subpath)
+  }
+
+  // erase a file and then append multiple strings to it; assumes file exists
+  def fileMultiwrite (home: File, subpath: List[String]) (strings: List[String]) : Unit = {
+    def recurse (out: FileOutputStream, strs: List[String]) : Unit = strs match {
+      case Nil => ()  // file already exists; do not track again
+      case s::ss => {
+        out.write(s.getBytes)
+        recurse(out, ss)
+      }
+    }
+
+    recurse(new FileOutputStream(Utils.newFile(home, subpath)), strings)
   }
 
   // update the list of tracked files/folders to include a new subpath
@@ -118,10 +146,19 @@ object Test {
   def verifyHashMaps (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
     print("Verifying Client-Server hashmap consistency... ")
 
-    assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles,
-          {println("ERROR!\nServer hashmap does not match reference") ; println(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted); println(allFiles); TestUtils.cleanUp(serverDir)(clientDirs)})
-    assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2),
-          {println("ERROR!\nClient-Server mismatch") ; TestUtils.cleanUp(serverDir)(clientDirs)})
+    assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles, {
+      println("ERROR!\nServer hashmap does not match reference")
+      println(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted)
+      println(allFiles)
+      TestUtils.cleanUp(serverDir)(clientDirs)
+    })
+    assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2), {
+      println("ERROR!\nClient-Server mismatch")
+      TestUtils.printServerMap(server.hashes)
+      clients.foreach(c => TestUtils.printClientMap(c.hashes))
+      println(allFiles)
+      TestUtils.cleanUp(serverDir)(clientDirs)
+    })
 
     println("done")
   }
@@ -236,6 +273,106 @@ object Test {
     Thread.sleep(1500)
 
     checkMaps(server)(clients)
+
+    println("Testing single client file creation and rewriting...")
+
+    createWriteAndTrack(clientDirs(0), List("new_file1"))(List("", "", ""))
+    createWriteAndTrack(clientDirs(0), List("new_file2"))(List("two\n", "things\n"))
+    createWriteAndTrack(clientDirs(0), List("new_file3"))(List("two\n", "things\n"))
+    createWriteAndTrack(clientDirs(0), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
+    createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
+    createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
+    createWriteAndTrack(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    println("Testing single client file appending...")
+
+    fileMultiwrite(clientDirs(0), List("new_file1"))(List("", "", ""))
+    fileMultiwrite(clientDirs(0), List("new_file2"))(List("two\n", "things\n"))
+    fileMultiwrite(clientDirs(0), List("new_file3"))(List("two\n", "things\n"))
+    fileMultiwrite(clientDirs(0), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
+    fileMultiwrite(clientDirs(0), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
+    fileMultiwrite(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
+    fileMultiwrite(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    println("Testing multiple client file deletion...")
+
+    deleteAndUntrack(clientDirs(0), List("new_file1"))
+    deleteAndUntrack(clientDirs(1), List("new_file2"))
+    deleteAndUntrack(clientDirs(2), List("new_file3"))
+    deleteAndUntrack(clientDirs(0), List("empty_dir", "test"))
+    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "test2"))
+    deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    println("Testing multiple client file creation and rewriting...")
+
+    createWriteAndTrack(clientDirs(2), List("new_file1"))(List("", "", ""))
+    createWriteAndTrack(clientDirs(1), List("new_file2"))(List("two\n", "things\n"))
+    createWriteAndTrack(clientDirs(0), List("new_file3"))(List("two\n", "things\n"))
+    createWriteAndTrack(clientDirs(1), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
+    createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
+    createWriteAndTrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
+    createWriteAndTrack(clientDirs(2), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    // TODO(jacob) this currently breaks with no hash checking implemented for writes
+    println("Testing multiple client file appending...")
+
+    fileMultiwrite(clientDirs(0), List("new_file1"))(List("", "", ""))
+    fileMultiwrite(clientDirs(2), List("new_file2"))(List("two\n", "things\n"))
+    fileMultiwrite(clientDirs(1), List("new_file3"))(List("two\n", "things\n"))
+    fileMultiwrite(clientDirs(0), List("new_file3"))(List("moar\n", "stuff\n"))
+    fileMultiwrite(clientDirs(2), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
+    fileMultiwrite(clientDirs(0), List("empty_dir", "test"))(List("z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z"))
+    fileMultiwrite(clientDirs(1), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
+    fileMultiwrite(clientDirs(2), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
+    fileMultiwrite(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
+    println("Testing multiple client file deletion...")
+
+    deleteAndUntrack(clientDirs(2), List("new_file1"))
+    deleteAndUntrack(clientDirs(1), List("new_file2"))
+    deleteAndUntrack(clientDirs(0), List("new_file3"))
+    deleteAndUntrack(clientDirs(2), List("empty_dir", "test"))
+    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "test2"))
+    deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
+    deleteAndUntrack(clientDirs(2), List("nested", "nested", "new_file"))
+
+    // triple filesystem scanning interval is a reasonable requirement
+    // (2*500) potentially for each Client plus an extra 500ms for overhead
+    Thread.sleep(1500)
+
+    checkMaps(server)(clients)
+
 
     TestUtils.cleanUp(serverDir)(clientDirs)
   }
