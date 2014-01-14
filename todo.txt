@@ -3,7 +3,6 @@ Dreams:
   (see sun.nio.fs.LinuxWatchService for an example)
 - implement file update/creation/deletion checking using java.nio.file in java 7
 - implement concurrency through Actors
-- formal test infrastructure
 
 For Deployment:
 - finish implementing consistency checks upon writes
@@ -18,6 +17,7 @@ For Deployment:
   - from Server's perspective, Client reconnection and connection should look identical
 
 TODO:
+- flesh out test infrastructure
 - create a global configuration object
 - use the filesystem to cache transfers so we don't OOM on large files
 - transfers get ~1.25 MB/s on my home network; look into improving this
