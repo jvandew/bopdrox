@@ -46,21 +46,26 @@ object Test {
       List("nested", "testFile"),
       List("nested", "nested", "nested", "test"))
 
-  var allFileSubpaths = List(emptyDirs, emptyFiles, nonEmptyFiles).flatten
+  val parentDirs = List(
+      List("nested"),
+      List("nested", "nested"),
+      List("nested", "nested", "nested"))
+
+  var allFileSubpaths = List(emptyDirs, emptyFiles, nonEmptyFiles, parentDirs).flatten
 
   // TODO(jacob) figure out how to define an implicit ordering on List[String]
   def allFiles : List[String] = allFileSubpaths.map(Utils.joinPath(_)).sorted
 
   private def buildEmptyDirs (serverDir: File) : Unit =
-    emptyDirs.foreach(TestUtils.createNewDir(serverDir, _))
+    emptyDirs.foreach(createDirAndTrack(serverDir, _))
 
   private def buildEmptyFiles (serverDir: File) : Unit =
-    emptyFiles.foreach(TestUtils.createNewFile(serverDir, _))
+    emptyFiles.foreach(createAndTrack(serverDir, _))
 
   private def buildNonEmptyFiles (serverDir: File) : Unit = {
-    TestUtils.createNewFile(serverDir, List("test"), "this is a test\n\n")
-    TestUtils.createNewFile(serverDir, List("test2"), "this is a test\n\n")
-    TestUtils.createNewFile(serverDir, List("nested", "testFile"), "\nI'm\n\talso\n a \n test!\n\n")
+    createWriteAndTrack(serverDir, List("test"))(List("this is a test\n\n"))
+    createWriteAndTrack(serverDir, List("test2"))(List("this is a test\n\n"))
+    createWriteAndTrack(serverDir, List("nested", "testFile"))(List("\nI'm\n\talso\n a \n test!\n\n"))
 
     val longText = new String(Array.tabulate(1000000)(n => 'a'))
     TestUtils.createNewFile(serverDir, List("nested", "nested", "nested", "test"), longText)
@@ -85,6 +90,12 @@ object Test {
   // shortcut to create a new file and add it for tracking
   def createAndTrack (home: File, subpath: List[String]) : Unit = {
     TestUtils.createNewFile(home, subpath)
+    track(subpath)
+  }
+
+  // shortcut to create a new directory and add it for tracking
+  def createDirAndTrack (home: File, subpath: List[String]) : Unit = {
+    TestUtils.createNewDir(home, subpath)
     track(subpath)
   }
 
@@ -124,13 +135,11 @@ object Test {
 
   // update the list of tracked files/folders to include a new subpath
   def track (subpath: List[String]) : Unit =
-    allFileSubpaths = subpath::allFileSubpaths
+    allFileSubpaths = allFileSubpaths ++ (Utils.pathParents(subpath).diff(allFileSubpaths))
 
   // remove a subpath from the list of tracked files/folders
-  def untrack (subpath: List[String]) : Unit = {
-    val parent = subpath.dropRight(1)
-    allFileSubpaths = allFileSubpaths.filter(!Utils.listStartsWith(_)(parent))
-  }
+  def untrack (subpath: List[String]) : Unit =
+    allFileSubpaths = allFileSubpaths.filter(!Utils.listStartsWith(_)(subpath))
 
   def verifyFiles (serverDir: File, clientDirs: List[File]) (file1: File) (file2: File) : Unit = {
     print("Verifying the contents of " + file1.getCanonicalPath + " and " + file2.getCanonicalPath + "... ")

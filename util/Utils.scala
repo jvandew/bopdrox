@@ -182,6 +182,10 @@ object Utils {
     }
   }
 
+  // obtain a list of all subpaths to parent folders in the given subpath
+  def pathParents (path: List[String]) : List[List[String]] =
+    path.scanLeft(List[String]())(_ :+ _).diff(List(Nil))
+
   // a nice way to print out the local host:port from a socket
   def printLocalSocket (sock: Socket) : String =
     sock.getLocalAddress.getHostName + ":" + sock.getLocalPort
