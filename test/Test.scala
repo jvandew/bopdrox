@@ -124,14 +124,12 @@ object Test {
 
   // update the list of tracked files/folders to include a new subpath
   def track (subpath: List[String]) : Unit =
-    allFileSubpaths = subpath :: allFileSubpaths.diff(List(subpath.dropRight(1)))
+    allFileSubpaths = subpath::allFileSubpaths
 
   // remove a subpath from the list of tracked files/folders
   def untrack (subpath: List[String]) : Unit = {
     val parent = subpath.dropRight(1)
-    allFileSubpaths = allFileSubpaths.diff(List(subpath))
-    if (allFileSubpaths.forall(!Utils.listStartsWith(_)(parent)))
-      allFileSubpaths = parent::allFileSubpaths
+    allFileSubpaths = allFileSubpaths.filter(!Utils.listStartsWith(_)(parent))
   }
 
   def verifyFiles (serverDir: File, clientDirs: List[File]) (file1: File) (file2: File) : Unit = {

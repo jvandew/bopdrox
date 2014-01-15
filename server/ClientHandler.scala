@@ -35,12 +35,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
    * ordering of message handling, only that the file operation + hash map
    * update is atomic. */
   private def matchMessage (msg: Message) : Unit = msg match {
+
     case FileMessage(fileContents) => {
       println("handling FileMessage... ")
 
       fileContents.foreach {
         _ match {
-          // empty directory
+
+          // directory
           case (subpath, None) => server.hashes.synchronized {
             val emptyDir = Utils.newFile(home, subpath)
             if (emptyDir.exists) emptyDir.delete
@@ -48,7 +50,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
             server.hashes.update(subpath, None)
           }
 
-          // normal file
+          // file
           case (subpath, Some(msgData)) => {
             val file = Utils.newFile(home, subpath)
 
@@ -57,18 +59,12 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
               val chain = server.hashes.get(subpath) match {
                 case None => {  // new file
                   Utils.ensureDir(home, subpath)
-                  Utils.findParent(home)(subpath)(f => server.hashes.contains(getRelPath(f))) match {
-                    case `subpath` => ()  // no previously empty folder to remove
-                    case parent => server.hashes.remove(parent)
-                  }
                   Nil
                 }
-
                 case Some(None) => {  // empty directory is now a file
                   file.delete
                   Nil
                 }
-
                 case Some(Some(ServerData(pTime, pHash, pChain))) => (pTime, pHash)::pChain // updated file
               }
 
@@ -90,39 +86,16 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
         // TODO(jacob) this synchronization is expensive...
         server.hashes.synchronized {
-
           server.hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
-
-          nameHash._2 match {
-            case None => {
-
-              file.list match {
-                case Array() => file.delete // empty folder. nothing to see here
-                case _ => Utils.dirForeach(file) { delFile =>
-                  server.hashes.remove(getRelPath(delFile))
-                  delFile.delete // would happen in dirDelete, but more efficient here
-                }
-                { delDir =>
-                  server.hashes.remove(getRelPath(delDir))
-                  delDir.delete // would happen in dirDelete, but more efficient here
-                }
-              }
-
-              Utils.dirDelete(file)
-            }
-
-            case Some(hash) => file.delete
-          }
-
-          val parent = file.getParentFile
-          if (Utils.dirEmpty(parent))
-            server.hashes.update(getRelPath(parent), None)
+          Utils.dirDelete(file)
         }
       }
 
       println("done")
     }
+
+    case _ => throw new IOException("Unknown or incorrect message received")
   }
 
   def message (msg: Message) : Unit = writeObject(msg)

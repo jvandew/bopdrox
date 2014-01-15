@@ -52,7 +52,6 @@ object Utils {
   def dirDelete (dir: File) : Boolean = {
     Option(dir.listFiles) match {
       case None => dir.delete
-      case Some(Array()) => dir.delete
       case Some(files) => {
         val deletions = files.map { file =>
           if (file.isFile)
@@ -75,25 +74,26 @@ object Utils {
   }
 
   // recursively walk a directory tree and apply the given function to each file
-  // calling this function on a file is an error
+  // and directory. calling this function on a file is an error
   // TODO(jacob) if dir is deleted during this call bad things can happen
   // currently any resulting IOExceptions are just swallowed
-  def dirForeach (dir: File) (proc: File => Unit) (empty: File => Unit) : Unit = {
+  def dirForeach (dir: File) (procFile: File => Unit) (procDir: File => Unit) : Unit = {
     try {
       Option(dir.listFiles) match {
         case None =>
           throw new IOException("Error while processing directory")
 
-        case Some(Array()) => empty(dir)
-
         case Some(files) => {
           files.foreach { file =>
             if (file.isFile)
-              proc(file)
-            else
-              dirForeach(file)(proc)(empty)
+              procFile(file)
+            else {
+              procDir(file)
+              dirForeach(file)(procFile)(procDir)
+            }
           }
         }
+
       }
     }
     catch {
