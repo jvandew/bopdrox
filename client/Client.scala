@@ -1,6 +1,7 @@
 package bopdrox.client
 
-import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest, Message, RemovedMessage}
+import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
+                    Message, RejectUpdateMessage, RemovedMessage}
 import bopdrox.util.Utils
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
@@ -78,6 +79,9 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
       println("done")
     }
+
+    case RejectUpdateMessage(rejections) =>
+      rejections.foreach(data => println("rejection received: " + Utils.joinPath(data._1)))
 
     case RemovedMessage(fileMap) => {
       println("handling RemovedMessage... ")

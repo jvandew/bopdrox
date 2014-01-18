@@ -141,11 +141,15 @@ object Test {
   def untrack (subpath: List[String]) : Unit =
     allFileSubpaths = allFileSubpaths.filter(!Utils.listStartsWith(_)(subpath))
 
-  def verifyFiles (serverDir: File, clientDirs: List[File]) (file1: File) (file2: File) : Unit = {
-    print("Verifying the contents of " + file1.getCanonicalPath + " and " + file2.getCanonicalPath + "... ")
+  def verifyFiles (serverDir: File, clientDirs: List[File]) (subpath: List[String]) : Unit = {
+    print("Verifying the contents of " + Utils.joinPath(subpath) + "... ")
+    val serverString = TestUtils.readFileString(serverDir, subpath)
+    val clientStrings = clientDirs.map(TestUtils.readFileString(_, subpath))
 
-    assert(Utils.verifyBytes(Utils.readFile(file1))(Utils.readFile(file2)),
-          {println("ERROR!") ; TestUtils.cleanUp(serverDir)(clientDirs)})
+    if (!clientStrings.forall(serverString == _)) {
+      println("FAILED!:\n" + serverString)
+      clientStrings.foreach(println(_))
+    }
 
     println("done")
   }
@@ -162,6 +166,11 @@ object Test {
     assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2), {
       println("ERROR!\nClient-Server mismatch")
       TestUtils.printServerMap(server.hashes)
+      server.hashes.keys.toList.map { subpath =>
+        val file = Utils.newFile(server.home, subpath)
+        if (file.isFile)
+          verifyFiles(serverDir, clientDirs)(subpath)
+      }
       clients.foreach(c => TestUtils.printClientMap(c.hashes))
       println(allFiles)
       TestUtils.cleanUp(serverDir)(clientDirs)
@@ -171,6 +180,7 @@ object Test {
   }
 
   // currently runs with no arguments
+  // TODO(jacob) test replacing file with folder and vice versa
   def main(args: Array[String]) : Unit = {
 
     // give each run a unique timestamp

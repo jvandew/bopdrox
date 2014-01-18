@@ -17,7 +17,8 @@ For Deployment:
   - from Server's perspective, Client reconnection and connection should look identical
 
 TODO:
-- flesh out test infrastructure
+- typedef things for simplicity
+- flesh out test infrastructure (should explicitly verify file contents)
 - create a global configuration object
 - use the filesystem to cache transfers so we don't OOM on large files
 - transfers get ~1.25 MB/s on my home network; look into improving this

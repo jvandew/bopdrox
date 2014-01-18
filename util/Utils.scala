@@ -60,7 +60,7 @@ object Utils {
             dirDelete(file)
         }
 
-        dir.delete && deletions.reduce(_ && _)
+        dir.delete && deletions.fold(true)(_ && _)
 
       }
     }
@@ -214,7 +214,7 @@ object Utils {
     path.split(Pattern.quote(File.separator)).toList
 
   // check whether or not two byte arrays match
-  def verifyBytes (hash1: Array[Byte])(hash2: Array[Byte]) =
+  def verifyBytes (hash1: Array[Byte])(hash2: Array[Byte]) : Boolean =
     hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
 
   // write data to a file

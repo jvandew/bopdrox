@@ -1,6 +1,7 @@
 package bopdrox.server
 
-import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest, Message, RemovedMessage}
+import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
+                    Message, RejectMsgData, RejectUpdateMessage, RemovedMessage}
 import bopdrox.util.Utils
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
@@ -39,10 +40,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     case FileMessage(fileContents) => {
       println("handling FileMessage... ")
 
+      var rejections = List[(List[String], RejectMsgData)]()
+      var originals = List[(List[String], Option[FileMsgData])]()
+
       fileContents.foreach {
         _ match {
 
           // directory
+          // TODO(jacob) design of FileMessage currently does not allow hash checking here...
           case (subpath, None) => server.hashes.synchronized {
             val emptyDir = Utils.newFile(home, subpath)
             if (emptyDir.exists) emptyDir.delete
@@ -56,23 +61,77 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
             server.hashes.synchronized {
 
-              val chain = server.hashes.get(subpath) match {
-                case None => {  // new file
-                  Utils.ensureDir(home, subpath)
-                  Nil
+              // verify hash and construct data for rejection and update to Client if mismatch
+              val dataOpt = server.hashes.get(subpath) match {
+                case None => None
+                case Some(None) => msgData.oldHash match {
+                  case None => None
+                  case _ => Some((RejectMsgData(msgData.oldHash, None), None))
                 }
-                case Some(None) => {  // empty directory is now a file
-                  file.delete
-                  Nil
+                case Some(Some(ServerData(_, oldHash, _))) => msgData.oldHash match {
+                  case None => {
+                    val bytes = Utils.readFile(file)
+                    val reject = RejectMsgData(msgData.oldHash, Some(oldHash))
+                    val fileData = FileMsgData(bytes, Some(msgData.newHash), oldHash)
+                    Some((reject, Some(fileData)))
+                  }
+                  case Some(msgHash) => {
+                    if (Utils.verifyBytes(oldHash)(msgHash))
+                      None
+                    else {
+                      val bytes = Utils.readFile(file)
+                      val reject = RejectMsgData(Some(msgHash), Some(oldHash))
+                      val fileData = FileMsgData(bytes, Some(msgData.newHash), oldHash)
+                      Some((reject, Some(fileData)))
+                    }
+                  }
                 }
-                case Some(Some(ServerData(pTime, pHash, pChain))) => (pTime, pHash)::pChain // updated file
+
               }
 
-              Utils.writeFile(file)(msgData.bytes)
-              server.hashes.update(subpath, Some(ServerData(file.lastModified, msgData.newHash, chain)))
+              dataOpt match {
+                case None => {
+                  val chain = server.hashes.get(subpath) match {
+                    case None => {  // new file
+                      Utils.ensureDir(home, subpath)
+                      Nil
+                    }
+                    case Some(None) => {  // empty directory is now a file
+                      file.delete
+                      Nil
+                    }
+                    case Some(Some(ServerData(pTime, pHash, pChain))) => (pTime, pHash)::pChain // updated file
+                  }
+
+                  Utils.writeFile(file)(msgData.bytes)
+                  server.hashes.update(subpath, Some(ServerData(file.lastModified, msgData.newHash, chain)))
+
+                  // forward message
+                  server.synchronized {
+                    server.clients.foreach { c =>
+                      if (!c.equals(this))
+                        c.message(msg)
+                    }
+                  }
+                }
+
+                case Some((reject, fileData)) => {
+                  rejections = (subpath, reject)::rejections
+                  originals = (subpath, fileData)::originals
+                }
+              }
+
             }
           }
 
+        }
+      }
+
+      rejections match {
+        case Nil => ()
+        case _ => {
+          message(RejectUpdateMessage(rejections))
+          message(FileMessage(originals))
         }
       }
 
@@ -89,6 +148,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
           server.hashes.remove(nameHash._1)
           val file = Utils.newFile(home, nameHash._1)
           Utils.dirDelete(file)
+        }
+      }
+
+      // forward message
+      server.synchronized {
+        server.clients.foreach { c =>
+          if (!c.equals(this))
+            c.message(msg)
         }
       }
 
@@ -146,19 +213,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     while (continue) {
       readObject match {
         case None => () // wait for termination
-        case Some(msg: Message) => {
-
-          // forward message
-          server.synchronized {
-            server.clients.foreach { c =>
-              if (!c.equals(this))
-                c.message(msg)
-            }
-          }
-
-          matchMessage(msg)
-        }
-
+        case Some(msg: Message) => matchMessage(msg)
         case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }
