@@ -3,6 +3,7 @@ Dreams:
   (see sun.nio.fs.LinuxWatchService for an example)
 - implement file update/creation/deletion checking using java.nio.file in java 7
 - implement concurrency through Actors
+- refactor the entire project into a more functional context (as far as that's possible)
 
 For Deployment:
 - finish implementing consistency checks upon writes
@@ -17,6 +18,8 @@ For Deployment:
   - from Server's perspective, Client reconnection and connection should look identical
 
 TODO:
+- write thread-safe wrappers around ObjectOutputStream and the file hasher, possibly for File operations as well
+- define and implement a logic for composing messages together
 - typedef things for simplicity
 - flesh out test infrastructure (should explicitly verify file contents)
 - create a global configuration object

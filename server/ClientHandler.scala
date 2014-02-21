@@ -3,7 +3,7 @@ package bopdrox.server
 import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
                     Message, RejectMsgData, RejectUpdateMessage, RemovedMessage}
 import bopdrox.util.Utils
-import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
+import java.io.{File, FileOutputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, HashSet}
 
@@ -12,6 +12,10 @@ import scala.collection.mutable.{HashMap, HashSet}
 class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   val home = server.home
+
+  // TODO(jacob) we need a less hacky logging framework
+  val logger = new FileOutputStream(new File("log-server" + (server.clients.length + 1)))
+  def log (data: String) : Unit = logger.write(data.getBytes)
 
   private val in = new ObjectInputStream(client.getInputStream)
   private val out = new ObjectOutputStream(client.getOutputStream)
@@ -23,7 +27,8 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   // disconnect client and mark handler to terminate
   private def disconnect (ioe: IOException) : Unit = {
-    println("disconnecting client: ")
+    // println("disconnecting client: ")
+    log("disconnecting client\n")
     server.dropClient(this)
     continue = false
   }
@@ -38,14 +43,16 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
   private def matchMessage (msg: Message) : Unit = msg match {
 
     case FileMessage(fileContents) => {
-      println("handling FileMessage... ")
+      // println("handling FileMessage... ")
+      log("handling FileMessage...\n")
 
       var rejections = List[(List[String], RejectMsgData)]()
       var originals = List[(List[String], Option[FileMsgData])]()
+      var conflictCopies = List[(List[String], Option[FileMsgData])]()
+      var good = List[(List[String], Option[FileMsgData])]()
 
       fileContents.foreach {
         _ match {
-
           // directory
           // TODO(jacob) design of FileMessage currently does not allow hash checking here...
           case (subpath, None) => server.hashes.synchronized {
@@ -53,10 +60,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
             if (emptyDir.exists) emptyDir.delete
             emptyDir.mkdirs
             server.hashes.update(subpath, None)
+
+            good = (subpath, None)::good
           }
 
           // file
           case (subpath, Some(msgData)) => {
+// println("server update: " + Utils.joinPath(subpath))
+log("server update: " + Utils.joinPath(subpath) + "\n")
             val file = Utils.newFile(home, subpath)
 
             server.hashes.synchronized {
@@ -66,14 +77,20 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 case None => None
                 case Some(None) => msgData.oldHash match {
                   case None => None
-                  case _ => Some((RejectMsgData(msgData.oldHash, None), None))
+                  case _ => {
+                    val reject = RejectMsgData(msgData.oldHash, None)
+                    val conflictData = FileMsgData(msgData.bytes, None, msgData.newHash)
+                    Some((reject, None, conflictData))
+                  }
                 }
+
                 case Some(Some(ServerData(_, oldHash, _))) => msgData.oldHash match {
                   case None => {
                     val bytes = Utils.readFile(file)
                     val reject = RejectMsgData(msgData.oldHash, Some(oldHash))
                     val fileData = FileMsgData(bytes, Some(msgData.newHash), oldHash)
-                    Some((reject, Some(fileData)))
+                    val conflictData = FileMsgData(msgData.bytes, None, msgData.newHash)
+                    Some((reject, Some(fileData), conflictData))
                   }
                   case Some(msgHash) => {
                     if (Utils.verifyBytes(oldHash)(msgHash))
@@ -82,12 +99,18 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                       val bytes = Utils.readFile(file)
                       val reject = RejectMsgData(Some(msgHash), Some(oldHash))
                       val fileData = FileMsgData(bytes, Some(msgData.newHash), oldHash)
-                      Some((reject, Some(fileData)))
+                      val conflictData = FileMsgData(msgData.bytes, None, msgData.newHash)
+                      Some((reject, Some(fileData), conflictData))
                     }
                   }
                 }
 
               }
+if (file.isFile)
+// println("O- " + Utils.joinPath(subpath) + ": " + new String(Utils.readFile(file)))
+// println("N- " + Utils.joinPath(subpath) + ": " + new String(msgData.bytes))
+log("O- " + Utils.joinPath(subpath) + ": " + new String(Utils.readFile(file)) + "\n")
+log("N- " + Utils.joinPath(subpath) + ": " + new String(msgData.bytes) + "\n")
 
               dataOpt match {
                 case None => {
@@ -106,18 +129,24 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                   Utils.writeFile(file)(msgData.bytes)
                   server.hashes.update(subpath, Some(ServerData(file.lastModified, msgData.newHash, chain)))
 
-                  // forward message
-                  server.synchronized {
-                    server.clients.foreach { c =>
-                      if (!c.equals(this))
-                        c.message(msg)
-                    }
-                  }
+                  good = (subpath, Some(msgData))::good
                 }
 
-                case Some((reject, fileData)) => {
+                case Some((reject, fileData, conflictData)) => {
+                  var conflictPath = subpath.updated(subpath.size - 1, subpath.last + "-cc")
+                  var conflictCount = 0
+                  while (Utils.newFile(home, conflictPath).exists) {
+                    conflictCount += 1
+                    conflictPath = subpath.updated(subpath.size - 1, subpath.last + "-cc" + conflictCount)
+                  }
+                  val conflictFile = Utils.newFile(home, conflictPath)
+                  Utils.ensureDir(home, conflictPath)
+                  Utils.writeFile(conflictFile)(conflictData.bytes)
+                  server.hashes.update(conflictPath, Some(ServerData(conflictFile.lastModified, conflictData.newHash, Nil)))
+
                   rejections = (subpath, reject)::rejections
                   originals = (subpath, fileData)::originals
+                  conflictCopies = (conflictPath, Some(conflictData))::conflictCopies
                 }
               }
 
@@ -128,21 +157,33 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
       }
 
       rejections match {
-        case Nil => ()
-        case _ => {
+        case Nil => server.synchronized {
+          server.clients.foreach { c =>
+            if (!c.equals(this))
+              c.message(msg)
+          }
+        }
+        case _ => server.synchronized {
           message(RejectUpdateMessage(rejections))
-          message(FileMessage(originals))
+          message(FileMessage(originals ++ conflictCopies))
+          server.clients.foreach { c =>
+            if (!c.equals(this))
+              c.message(FileMessage(good ++ conflictCopies))
+          }
         }
       }
 
-      println("done")
+      // println("done")
+      log("done\n")
     }
 
     case RemovedMessage(fileMap) => {
-      println("handling RemovedMessage... " )
+      // println("handling RemovedMessage... " )
+      log("handling RemovedMessage...\n")
 
       fileMap.foreach { nameHash =>
-
+// println("server removed: " + Utils.joinPath(nameHash._1))
+log("server removed: " + Utils.joinPath(nameHash._1) + "\n")
         // TODO(jacob) this synchronization is expensive...
         server.hashes.synchronized {
           server.hashes.remove(nameHash._1)
@@ -159,7 +200,8 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
         }
       }
 
-      println("done")
+      // println("done")
+      log("done\n")
     }
 
     case _ => throw new IOException("Unknown or incorrect message received")
@@ -169,7 +211,8 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   def run : Unit = {
 
-    println("client connected: " + Utils.printSocket(client))
+    // println("client connected: " + Utils.printSocket(client))
+    log("client connected: " + Utils.printSocket(client) + "\n")
 
     // send client a list of file names and hashes; do not synchronize on read
     val fhList = server.hashes.toList.map {

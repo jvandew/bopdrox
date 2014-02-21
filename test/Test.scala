@@ -87,6 +87,24 @@ object Test {
     serverDir
   }
 
+  def checkAndVerifyHashMaps (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
+    print("Verifying Client-Server hashmap consistency... ")
+
+    checkReference(serverDir, clientDirs)(server)(clients)
+    verifyHashMaps(serverDir, clientDirs)(server)(clients)
+
+    println("done")
+  }
+
+  def checkReference (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
+    assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles, {
+      println("ERROR!\nServer hashmap does not match reference")
+      println(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted)
+      println(allFiles)
+      TestUtils.cleanUp(serverDir)(clientDirs)
+    })
+  }
+
   // shortcut to create a new file and add it for tracking
   def createAndTrack (home: File, subpath: List[String]) : Unit = {
     TestUtils.createNewFile(home, subpath)
@@ -133,6 +151,22 @@ object Test {
     recurse(new FileOutputStream(Utils.newFile(home, subpath)), strings)
   }
 
+  def printAndVerifyFiles (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
+    println()
+    TestUtils.printServerMap(server.hashes)
+    server.hashes.keys.toList.foreach { subpath =>
+      if (Utils.newFile(server.home, subpath).isFile)
+        verifyFiles(serverDir, clientDirs)(subpath)
+    }
+
+    println()
+    clients.foreach(c => TestUtils.printClientMap(c.hashes))
+
+    println("Test-maintained file list (not necessarily correct):")
+    println(allFiles)
+    println()
+  }
+
   // update the list of tracked files/folders to include a new subpath
   def track (subpath: List[String]) : Unit =
     allFileSubpaths = allFileSubpaths ++ (Utils.pathParents(subpath).diff(allFileSubpaths))
@@ -155,28 +189,17 @@ object Test {
   }
 
   def verifyHashMaps (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
-    print("Verifying Client-Server hashmap consistency... ")
-
-    assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles, {
-      println("ERROR!\nServer hashmap does not match reference")
-      println(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted)
-      println(allFiles)
-      TestUtils.cleanUp(serverDir)(clientDirs)
-    })
     assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2), {
       println("ERROR!\nClient-Server mismatch")
       TestUtils.printServerMap(server.hashes)
-      server.hashes.keys.toList.map { subpath =>
-        val file = Utils.newFile(server.home, subpath)
-        if (file.isFile)
+      server.hashes.keys.toList.foreach { subpath =>
+        if (Utils.newFile(server.home, subpath).isFile)
           verifyFiles(serverDir, clientDirs)(subpath)
       }
       clients.foreach(c => TestUtils.printClientMap(c.hashes))
       println(allFiles)
       TestUtils.cleanUp(serverDir)(clientDirs)
     })
-
-    println("done")
   }
 
   // currently runs with no arguments
@@ -185,6 +208,10 @@ object Test {
 
     // give each run a unique timestamp
     val timeStr = (new Date).getTime.toString
+
+    // quadruple filesystem scanning interval is a reasonable requirement
+    // (3*500) potentially for each Client plus an extra 500ms for overhead
+    val sleep = 2000
 
     val serverDir = buildTestDir(timeStr)
     val server = new Server(serverDir)(9000)
@@ -199,7 +226,7 @@ object Test {
     val clientThreads = clients.map(new Thread(_))
 
     val checkFiles = verifyFiles(serverDir, clientDirs) _
-    val checkMaps = verifyHashMaps(serverDir, clientDirs) _
+    val checkMaps = checkAndVerifyHashMaps(serverDir, clientDirs) _
 
     while (!server.isOpen) Thread.sleep(100)
 
@@ -237,10 +264,7 @@ object Test {
     createAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
     createAndTrack(clientDirs(0), List("nested", "nested", "new_file"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing single client file deletion...")
@@ -253,10 +277,7 @@ object Test {
     deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))
     deleteAndUntrack(clientDirs(1), List("nested", "nested", "new_file"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing multiple client file creation...")
@@ -269,10 +290,7 @@ object Test {
     createAndTrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))
     createAndTrack(clientDirs(1), List("nested", "nested", "new_file"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing multiple client file deletion...")
@@ -285,10 +303,7 @@ object Test {
     deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
     deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing single client file creation and rewriting...")
@@ -301,10 +316,7 @@ object Test {
     createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
     createWriteAndTrack(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing single client file appending...")
@@ -317,10 +329,7 @@ object Test {
     fileMultiwrite(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
     fileMultiwrite(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing multiple client file deletion...")
@@ -333,10 +342,7 @@ object Test {
     deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "empty_dir", "test.test"))
     deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
     println("Testing multiple client file creation and rewriting...")
@@ -349,48 +355,26 @@ object Test {
     createWriteAndTrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
     createWriteAndTrack(clientDirs(2), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
+    Thread.sleep(sleep)
     checkMaps(server)(clients)
 
-    // TODO(jacob) this currently breaks with no hash checking implemented for writes
     println("Testing multiple client file appending...")
 
     fileMultiwrite(clientDirs(0), List("new_file1"))(List("", "", ""))
     fileMultiwrite(clientDirs(2), List("new_file2"))(List("two\n", "things\n"))
-    fileMultiwrite(clientDirs(1), List("new_file3"))(List("two\n", "things\n"))
+    fileMultiwrite(clientDirs(1), List("new_file3"))(List("ttwo\n", "things\n"))
     fileMultiwrite(clientDirs(0), List("new_file3"))(List("moar\n", "stuff\n"))
-    fileMultiwrite(clientDirs(2), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
+    fileMultiwrite(clientDirs(2), List("empty_dir", "test"))(List("tl", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
     fileMultiwrite(clientDirs(0), List("empty_dir", "test"))(List("z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z"))
     fileMultiwrite(clientDirs(1), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
     fileMultiwrite(clientDirs(2), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
     fileMultiwrite(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
 
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
+    Thread.sleep(sleep)
+    verifyHashMaps(serverDir, clientDirs)(server)(clients)
+    println("done")
 
-    checkMaps(server)(clients)
-
-    println("Testing multiple client file deletion...")
-
-    deleteAndUntrack(clientDirs(2), List("new_file1"))
-    deleteAndUntrack(clientDirs(1), List("new_file2"))
-    deleteAndUntrack(clientDirs(0), List("new_file3"))
-    deleteAndUntrack(clientDirs(2), List("empty_dir", "test"))
-    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "test2"))
-    deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    deleteAndUntrack(clientDirs(2), List("nested", "nested", "new_file"))
-
-    // triple filesystem scanning interval is a reasonable requirement
-    // (2*500) potentially for each Client plus an extra 500ms for overhead
-    Thread.sleep(1500)
-
-    checkMaps(server)(clients)
-
-
+    println("All tests pass (for what that's worth). Cleaning up...")
     TestUtils.cleanUp(serverDir)(clientDirs)
   }
 

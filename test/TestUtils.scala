@@ -4,11 +4,19 @@ import bopdrox.util.Utils
 import bopdrox.client.ClientData
 import bopdrox.server.ServerData
 import java.io.File
+import java.util.Scanner
 import scala.collection.mutable.HashMap
 
 // This object stores some helpful functions used in the Test object
 
 object TestUtils {
+
+  // insert a "breakpoint" in the code
+  def breakpoint : Unit = {
+    val scanner = new Scanner(System.in)
+    println("Breakpoint reached. Press enter to continue.")
+    scanner.nextLine
+  }
 
   // TODO(jacob) clean up is still very messy...
   def cleanUp (serverDir: File) (clientDirs: List[File]) : Unit = {
