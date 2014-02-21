@@ -3,7 +3,7 @@ package bopdrox.server
 import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
                     Message, RejectMsgData, RejectUpdateMessage, RemovedMessage}
 import bopdrox.util.Utils
-import java.io.{File, FileOutputStream, IOException, ObjectInputStream, ObjectOutputStream}
+import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, HashSet}
 
@@ -12,10 +12,6 @@ import scala.collection.mutable.{HashMap, HashSet}
 class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   val home = server.home
-
-  // TODO(jacob) we need a less hacky logging framework
-  val logger = new FileOutputStream(new File("log-server" + (server.clients.length + 1)))
-  def log (data: String) : Unit = logger.write(data.getBytes)
 
   private val in = new ObjectInputStream(client.getInputStream)
   private val out = new ObjectOutputStream(client.getOutputStream)
@@ -27,8 +23,6 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   // disconnect client and mark handler to terminate
   private def disconnect (ioe: IOException) : Unit = {
-    // println("disconnecting client: ")
-    log("disconnecting client\n")
     server.dropClient(this)
     continue = false
   }
@@ -43,8 +37,6 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
   private def matchMessage (msg: Message) : Unit = msg match {
 
     case FileMessage(fileContents) => {
-      // println("handling FileMessage... ")
-      log("handling FileMessage...\n")
 
       var rejections = List[(List[String], RejectMsgData)]()
       var originals = List[(List[String], Option[FileMsgData])]()
@@ -66,8 +58,6 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
           // file
           case (subpath, Some(msgData)) => {
-// println("server update: " + Utils.joinPath(subpath))
-log("server update: " + Utils.joinPath(subpath) + "\n")
             val file = Utils.newFile(home, subpath)
 
             server.hashes.synchronized {
@@ -106,11 +96,6 @@ log("server update: " + Utils.joinPath(subpath) + "\n")
                 }
 
               }
-if (file.isFile)
-// println("O- " + Utils.joinPath(subpath) + ": " + new String(Utils.readFile(file)))
-// println("N- " + Utils.joinPath(subpath) + ": " + new String(msgData.bytes))
-log("O- " + Utils.joinPath(subpath) + ": " + new String(Utils.readFile(file)) + "\n")
-log("N- " + Utils.joinPath(subpath) + ": " + new String(msgData.bytes) + "\n")
 
               dataOpt match {
                 case None => {
@@ -173,17 +158,11 @@ log("N- " + Utils.joinPath(subpath) + ": " + new String(msgData.bytes) + "\n")
         }
       }
 
-      // println("done")
-      log("done\n")
     }
 
     case RemovedMessage(fileMap) => {
-      // println("handling RemovedMessage... " )
-      log("handling RemovedMessage...\n")
 
       fileMap.foreach { nameHash =>
-// println("server removed: " + Utils.joinPath(nameHash._1))
-log("server removed: " + Utils.joinPath(nameHash._1) + "\n")
         // TODO(jacob) this synchronization is expensive...
         server.hashes.synchronized {
           server.hashes.remove(nameHash._1)
@@ -200,8 +179,6 @@ log("server removed: " + Utils.joinPath(nameHash._1) + "\n")
         }
       }
 
-      // println("done")
-      log("done\n")
     }
 
     case _ => throw new IOException("Unknown or incorrect message received")
@@ -211,8 +188,7 @@ log("server removed: " + Utils.joinPath(nameHash._1) + "\n")
 
   def run : Unit = {
 
-    // println("client connected: " + Utils.printSocket(client))
-    log("client connected: " + Utils.printSocket(client) + "\n")
+    println("client connected: " + Utils.printSocket(client))
 
     // send client a list of file names and hashes; do not synchronize on read
     val fhList = server.hashes.toList.map {
@@ -223,7 +199,6 @@ log("server removed: " + Utils.joinPath(nameHash._1) + "\n")
     }
 
     val listMsg = FileListMessage(fhList)
-
     writeObject(listMsg)
 
     readObject match {

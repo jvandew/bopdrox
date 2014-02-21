@@ -3,7 +3,7 @@ package bopdrox.client
 import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
                     Message, RejectUpdateMessage, RemovedMessage}
 import bopdrox.util.Utils
-import java.io.{File, FileInputStream, FileOutputStream, IOException, ObjectInputStream, ObjectOutputStream}
+import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, Queue}
 
@@ -26,10 +26,6 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
   // TODO(jacob) include version vectors at some point
   val hashes = new HashMap[List[String], Option[ClientData]]
 
-  // TODO(jacob) we need a less hacky logging framework
-  val logger = new FileOutputStream(new File("log-" + home.getName.split('_')(0)))
-  def log (data: String) : Unit = logger.write(data.getBytes)
-
   val getRelPath = Utils.getRelativePath(home)_
 
   // store received Messages for later consumption
@@ -38,11 +34,7 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
   private var open = false
 
   // disconnect handler
-  private[client] def disconnect (ioe: IOException) : Unit = {
-    // println("disconnected from Server; exiting...")
-    log("disconnected from Server; exiting...\n")
-    sys.exit
-  }
+  private[client] def disconnect (ioe: IOException) : Unit = sys.exit
 
   var sock: Socket = null
 
@@ -52,8 +44,6 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
   private def matchMessage (msg: Message) : Unit = msg match {
 
     case FileMessage(fileContents) => {
-      // println("handling FileMessage... ")
-      log("handling FileMessage...\n")
 
       // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
       fileContents.foreach {
@@ -69,8 +59,6 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
           // file
           case (subpath, Some(msgData)) => {
-// println("client update: " + Utils.joinPath(subpath))
-log("client update: " + Utils.joinPath(subpath) + "\n")
             val file = Utils.newFile(home, subpath)
 
             hashes.get(subpath) match {
@@ -83,30 +71,18 @@ log("client update: " + Utils.joinPath(subpath) + "\n")
             hashes.update(subpath, Some(ClientData(file.lastModified, msgData.newHash)))
           }
         }
-      }
 
-      // println("done")
-      log("done\n")
+      }
     }
 
-    case RejectUpdateMessage(rejections) =>
-      rejections.foreach(data => /* println("rejection received: " + Utils.joinPath(data._1))) */
-      log("rejection received: " + Utils.joinPath(data._1) + "\n"))
+    case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
 
     case RemovedMessage(fileMap) => {
-      // println("handling RemovedMessage... ")
-      log("handling RemovedMessage...\n")
-
       fileMap.foreach { nameHash =>
-// println("client removed: " + Utils.joinPath(nameHash._1))
-log("client removed: " + Utils.joinPath(nameHash._1) + "\n")
         hashes.remove(nameHash._1)
         val file = Utils.newFile(home, nameHash._1)
         Utils.dirDelete(file)
       }
-
-      // println("done")
-      log("done\n")
     }
 
     case _ => throw new IOException("Unknown or incorrect message received")
@@ -115,17 +91,13 @@ log("client removed: " + Utils.joinPath(nameHash._1) + "\n")
   def run : Unit = {
 
     // generate file list and hashes
-    // print("hashing files... ")
-    log("hashing files...\n")
-
     Utils.dirForeach(home) { file =>
       val hash = Utils.hashFile(file)
       hashes.update(getRelPath(file), Some(ClientData(file.lastModified, hash)))
     }
-    { dir => hashes.update(getRelPath(dir), None)}
-
-    // println("done")
-    log("done\n")
+    { dir =>
+      hashes.update(getRelPath(dir), None)
+    }
 
     val serv = new Socket(host, port)
     sock = serv
@@ -134,9 +106,6 @@ log("client removed: " + Utils.joinPath(nameHash._1) + "\n")
 
     def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
     val writeObject = Utils.checkedWrite(disconnect)(out)_
-
-    // println("connected to server")
-    log("connected to server\n")
 
     // get list of files and hashes from server
     // TODO(jacob) currently assume Client files are a subset of Server files
@@ -271,22 +240,14 @@ log("client removed: " + Utils.joinPath(nameHash._1) + "\n")
       updates match {
         case Nil => ()  // no updates
         case _ => {
-          // println("update(s) detected. notifying Server... ")
-          log("update(s) detected. notifying Server...\n")
           val msg = FileMessage(updates)
           writeObject(msg)
-          // println("done")
-          log("done\n")
         }
       }
 
       if (!keyHashes.isEmpty) {
-        // println("removed files detected. notifying Server... ")
-        log("removed files detected. notifying Server...\n")
         val msg = RemovedMessage(keyHashes)
         writeObject(msg)
-        // println("done")
-        log("done\n")
       }
 
       Thread.sleep(500)
