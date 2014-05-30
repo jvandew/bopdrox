@@ -36,6 +36,7 @@ object Utils {
   def checkedWrite (handler: IOException => Unit) (out: ObjectOutputStream) (msg: Message) : Unit = {
     try {
       out.writeObject(msg)
+      out.reset
     } catch {
       case ioe: IOException => handler(ioe)
     }
