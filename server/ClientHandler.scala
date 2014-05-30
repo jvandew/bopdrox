@@ -190,7 +190,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
     println("client connected: " + Utils.printSocket(client))
 
-    // send client a list of file names and hashes; do not synchronize on read
+    // send client a list of file names and hashes
     val fhList = server.hashes.toList.map {
       _ match {
         case (subpath, None) => (subpath, None)

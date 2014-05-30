@@ -90,15 +90,6 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
   def run : Unit = {
 
-    // generate file list and hashes
-    Utils.dirForeach(home) { file =>
-      val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), Some(ClientData(file.lastModified, hash)))
-    }
-    { dir =>
-      hashes.update(getRelPath(dir), None)
-    }
-
     val serv = new Socket(host, port)
     sock = serv
     val out = new ObjectOutputStream(serv.getOutputStream)
@@ -112,6 +103,15 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
     readObject match {
       case None => () // wait for termination
       case Some(FileListMessage(fileList)) => {
+
+        // generate local file list and hashes
+        Utils.dirForeach(home) { file =>
+          val hash = Utils.hashFile(file)
+          hashes.update(getRelPath(file), Some(ClientData(file.lastModified, hash)))
+        }
+        { dir =>
+          hashes.update(getRelPath(dir), None)
+        }
 
         val filtered = fileList.filter(nh =>
           (hashes.get(nh._1), nh._2) match {
