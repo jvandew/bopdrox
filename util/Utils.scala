@@ -1,6 +1,5 @@
 package bopdrox.util
 
-import bopdrox.msg.Message
 import java.io.{File, FileInputStream, FileOutputStream, IOException,
                 ObjectInputStream, ObjectOutputStream}
 import java.net.Socket

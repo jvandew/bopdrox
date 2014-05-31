@@ -2,8 +2,12 @@ scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
 
 .PHONY: clean util
 
-util: Utils.scala
-	$(scalac) Utils.scala
+util: FSObject.scala Message.scala package.scala Utils.scala
+	$(scalac)  \
+		package.scala      \
+		FSObject.scala  \
+		Message.scala   \
+		Utils.scala
 
 clean:
 	-rm *.class
