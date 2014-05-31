@@ -4,7 +4,7 @@ scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
 
 util: FSObject.scala Message.scala package.scala Utils.scala
 	$(scalac)  \
-		package.scala      \
+		package.scala   \
 		FSObject.scala  \
 		Message.scala   \
 		Utils.scala

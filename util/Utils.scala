@@ -42,7 +42,7 @@ object Utils {
   }
 
   // get the contents of a file and its hash value in that order
-  def contentsAndHash (file: File) : (Array[Byte], Array[Byte]) = {
+  def contentsAndHash (file: File) : (FileBytes, FileHash) = {
     val bytes = readFile(file)
     (bytes, hasher.digest(bytes))
   }
@@ -101,7 +101,7 @@ object Utils {
     }
   }
 
-  def ensureDir (home: File, subpath: List[String]) : Unit =
+  def ensureDir (home: File, subpath: FSPath) : Unit =
     ensureDir(home, joinPath(subpath))
 
   def ensureDir (home: File, subpath: String) : Unit =
@@ -124,7 +124,7 @@ object Utils {
   /* Search for the highest parent folder of the given file/folder that satisfies
    * the given predicate. If no parent is found the given subpath will be returned.
    * TODO(jacob) are we guranteed processing order with takeWhile? */
-  def findParent (home: File) (subpath: List[String]) (pred: File => Boolean) : List[String] = {
+  def findParent (home: File) (subpath: FSPath) (pred: File => Boolean) : FSPath = {
     var sub = List[String]()
     subpath.takeWhile { p =>
       sub = sub :+ p
@@ -140,11 +140,11 @@ object Utils {
    * subpath are deleted during execution. If the home folder has been deleted
    * this function will return the top folder contained within home. In other
    * words, you can't go home again, but you can sure be in denial about it. */
-  def getDeleted (home: File, subpath: List[String]) : List[String] =
+  def getDeleted (home: File, subpath: FSPath) : FSPath =
     findParent(home)(subpath)(!_.exists)
 
   // find the relative path for a file. requires file to be contained within home
-  def getRelativePath (home: File) (file: File) : List[String] = {
+  def getRelativePath (home: File) (file: File) : FSPath = {
     val filePath = file.getCanonicalPath
     val homePrefix = home.getCanonicalPath + File.separator
     val relPathString = filePath.stripPrefix(homePrefix)
@@ -156,16 +156,16 @@ object Utils {
   }
 
   // wrapper around hasher.digest(bytes)
-  def hashBytes (bytes: Array[Byte]) : Array[Byte] = hasher.digest(bytes)
+  def hashBytes (bytes: FileBytes) : FileHash = hasher.digest(bytes)
 
   // helper function to hash the contents of a file
-  def hashFile (file: File) : Array[Byte] = contentsAndHash(file)._2
+  def hashFile (file: File) : FileHash = contentsAndHash(file)._2
 
   // check if the given File object is a file and is empty
   def isEmptyFile (file: File) : Boolean = file.isFile && (file.length == 0)
 
   // join together a list of strings representing a file path
-  def joinPath (path: List[String]) : String = path.reduce(_ + File.separator + _)
+  def joinPath (path: FSPath) : String = path.reduce(_ + File.separator + _)
 
   // is this a prefix of the given list?
   def listStartsWith[T] (list: List[T]) (prefix: List[T]) : Boolean = (list, prefix) match {
@@ -175,7 +175,7 @@ object Utils {
   }
 
   // shortcut method to create a File object using our List subpath format
-  def newFile (home: File, subpath: List[String]) : File = {
+  def newFile (home: File, subpath: FSPath) : File = {
     subpath match {
       case Nil => home
       case path => new File(home, joinPath(path))
@@ -183,7 +183,7 @@ object Utils {
   }
 
   // obtain a list of all subpaths to parent folders in the given subpath
-  def pathParents (path: List[String]) : List[List[String]] =
+  def pathParents (path: FSPath) : List[FSPath] =
     path.scanLeft(List[String]())(_ :+ _).diff(List(Nil))
 
   // a nice way to print out the local host:port from a socket
@@ -194,14 +194,14 @@ object Utils {
   def printSocket (sock: Socket) : String =
     sock.getInetAddress.getHostName + ":" + sock.getPort
 
-  def readFile (home: File, subpath: List[String]) : Array[Byte] =
+  def readFile (home: File, subpath: FSPath) : FileBytes =
     readFile(home, joinPath(subpath))
 
-  def readFile (home: File, subpath: String) : Array[Byte] =
+  def readFile (home: File, subpath: String) : FileBytes =
     readFile(new File(home, subpath))
 
   // read the contents of a file
-  def readFile (file: File) : Array[Byte] = {
+  def readFile (file: File) : FileBytes = {
     val fileIn = new FileInputStream(file)
     val bytes = new Array[Byte](file.length.toInt)
     fileIn.read(bytes)
@@ -210,15 +210,15 @@ object Utils {
   }
 
   // split a file path string into a list of strings
-  def splitPath (path: String) : List[String] =
+  def splitPath (path: String) : FSPath =
     path.split(Pattern.quote(File.separator)).toList
 
   // check whether or not two byte arrays match
-  def verifyBytes (hash1: Array[Byte])(hash2: Array[Byte]) : Boolean =
+  def verifyBytes (hash1: FileHash)(hash2: FileHash) : Boolean =
     hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
 
   // write data to a file
-  def writeFile (file: File) (bytes: Array[Byte]) : Unit = {
+  def writeFile (file: File) (bytes: FileBytes) : Unit = {
     val fileOut = new FileOutputStream(file)
     fileOut.write(bytes)
     fileOut.close
