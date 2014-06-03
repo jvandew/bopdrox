@@ -174,6 +174,15 @@ object Utils {
     case (e1::list2, e2::prefix2) => (e1 equals e2) && listStartsWith(list2)(prefix2)
   }
 
+  // create a new directory, replacing any existing file
+  def newDir (home: File, subpath: FSPath) : File = {
+    val emptyDir = Utils.newFile(home, subpath)
+    if (emptyDir.exists) emptyDir.delete
+    emptyDir.mkdirs
+
+    emptyDir
+  }
+
   // shortcut method to create a File object using our List subpath format
   def newFile (home: File, subpath: FSPath) : File = {
     subpath match {
@@ -213,8 +222,8 @@ object Utils {
   def splitPath (path: String) : FSPath =
     path.split(Pattern.quote(File.separator)).toList
 
-  // check whether or not two byte arrays match
-  def verifyBytes (hash1: FileHash)(hash2: FileHash) : Boolean =
+  // check whether or not two hashes match
+  def verifyHash (hash1: FileHash)(hash2: FileHash) : Boolean =
     hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
 
   // write data to a file

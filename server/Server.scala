@@ -1,6 +1,6 @@
 package bopdrox.server
 
-import bopdrox.util.Utils
+import bopdrox.util.{FSDirectory, FSFile, Utils}
 import java.io.File
 import java.net.ServerSocket
 import scala.collection.mutable.HashMap
@@ -29,7 +29,7 @@ class Server (val home: File) (port: Int) extends Runnable {
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[List[String], Option[ServerData]]
+  val hashes = new ServerMap
 
   def dropClient (client: ClientHandler): Unit = this.synchronized {
     clients = clients.diff(List(client))
@@ -44,10 +44,15 @@ class Server (val home: File) (port: Int) extends Runnable {
 
     // no handlers yet -> no synchronization
     Utils.dirForeach(home) { file =>
-      val hash = Utils.hashFile(file)
-      hashes.update(getRelPath(file), Some(ServerData(file.lastModified, hash, Nil)))
+      val fsFile = FSFile(getRelPath(file))
+      val data = FileData(file.lastModified, Utils.hashFile(file), Nil)
+      hashes.update(fsFile, data)
     }
-    { dir => hashes.update(getRelPath(dir), None)}
+    { dir =>
+      val fsDir = FSDirectory(getRelPath(dir))
+      val data = DirData(dir.lastModified)
+      hashes.update(fsDir, data)
+    }
 
     println("done")
 

@@ -1,11 +1,9 @@
 package bopdrox.server
 
-import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
-                    Message, RejectMsgData, RejectUpdateMessage, RemovedMessage}
-import bopdrox.util.Utils
+import bopdrox.util.{Ack, FSListMessage, FSTransferMessage, FSRemovedMessage,
+                     FSRequest, FTData, Rejection, RejectUpdateMessage, Utils}
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
-import scala.collection.mutable.{HashMap, HashSet}
 
 /* A ClientHandler is a Runnable object designed to handle all communications
  * with a Client */
@@ -36,106 +34,323 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
    * update is atomic. */
   private def matchMessage (msg: Message) : Unit = msg match {
 
-    case FileMessage(fileContents) => {
+    case FSTransferMessage(fsList) => {
 
-      var rejections = List[(List[String], RejectMsgData)]()
-      var originals = List[(List[String], Option[FileMsgData])]()
-      var conflictCopies = List[(List[String], Option[FileMsgData])]()
-      var good = List[(List[String], Option[FileMsgData])]()
+      var rejections = List[Rejection]()
+      var originals = List[FTData]()
+      var conflictCopies = List[FTData]()
+      var good = List[FTData]()
 
-      fileContents.foreach {
+      fsList.foreach {
         _ match {
-          // directory
-          // TODO(jacob) design of FileMessage currently does not allow hash checking here...
-          case (subpath, None) => server.hashes.synchronized {
-            val emptyDir = Utils.newFile(home, subpath)
-            if (emptyDir.exists) emptyDir.delete
-            emptyDir.mkdirs
-            server.hashes.update(subpath, None)
+          case FTDirectory(dir, oldFSObj) => server.hashes.synchronized {
+            (server.hashes.lookupPath(dir.path), oldFSObj) match {
 
-            good = (subpath, None)::good
-          }
-
-          // file
-          case (subpath, Some(msgData)) => {
-            val file = Utils.newFile(home, subpath)
-
-            server.hashes.synchronized {
-
-              // verify hash and construct data for rejection and update to Client if mismatch
-              val dataOpt = server.hashes.get(subpath) match {
-                case None => None
-                case Some(None) => msgData.oldHash match {
-                  case None => None
-                  case _ => {
-                    val reject = RejectMsgData(msgData.oldHash, None)
-                    val conflictData = FileMsgData(msgData.bytes, None, msgData.newHash)
-                    Some((reject, None, conflictData))
-                  }
-                }
-
-                case Some(Some(ServerData(_, oldHash, _))) => msgData.oldHash match {
-                  case None => {
-                    val bytes = Utils.readFile(file)
-                    val reject = RejectMsgData(msgData.oldHash, Some(oldHash))
-                    val fileData = FileMsgData(bytes, Some(msgData.newHash), oldHash)
-                    val conflictData = FileMsgData(msgData.bytes, None, msgData.newHash)
-                    Some((reject, Some(fileData), conflictData))
-                  }
-                  case Some(msgHash) => {
-                    if (Utils.verifyBytes(oldHash)(msgHash))
-                      None
-                    else {
-                      val bytes = Utils.readFile(file)
-                      val reject = RejectMsgData(Some(msgHash), Some(oldHash))
-                      val fileData = FileMsgData(bytes, Some(msgData.newHash), oldHash)
-                      val conflictData = FileMsgData(msgData.bytes, None, msgData.newHash)
-                      Some((reject, Some(fileData), conflictData))
-                    }
-                  }
-                }
-
+              case (None, None) => {
+                val emptyDir = Utils.newDir(home, dir.path)
+                server.hashes(dir) = DirData(emptyDir.lastModified)
+                good = FTDirectory(dir, oldFSObj)::good
               }
 
-              dataOpt match {
-                case None => {
-                  val chain = server.hashes.get(subpath) match {
-                    case None => {  // new file
-                      Utils.ensureDir(home, subpath)
-                      Nil
-                    }
-                    case Some(None) => {  // empty directory is now a file
-                      file.delete
-                      Nil
-                    }
-                    case Some(Some(ServerData(pTime, pHash, pChain))) => (pTime, pHash)::pChain // updated file
-                  }
+              case (Some(dData: DirData), Some(flDir: FLDirectory)) => ()
+                // nothing to do here, transfer redundant
 
-                  Utils.writeFile(file)(msgData.bytes)
-                  server.hashes.update(subpath, Some(ServerData(file.lastModified, msgData.newHash, chain)))
+              case (Some(fData: FileData), Some(flFile: FLFile)) => {
 
-                  good = (subpath, Some(msgData))::good
+                if (Utils.verifyHash(fData.hash, flFile.hash)) {
+                  val emptyDir = Utils.newDir(home, dir.path)
+                  server.hashes(dir) = emptyDir.lastModified
+                  good = FTDirectory(dir, oldFSObj)::good
                 }
 
-                case Some((reject, fileData, conflictData)) => {
-                  var conflictPath = subpath.updated(subpath.size - 1, subpath.last + "-cc")
+                else {
+                  var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
                   var conflictCount = 0
                   while (Utils.newFile(home, conflictPath).exists) {
                     conflictCount += 1
-                    conflictPath = subpath.updated(subpath.size - 1, subpath.last + "-cc" + conflictCount)
+                    conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
                   }
-                  val conflictFile = Utils.newFile(home, conflictPath)
-                  Utils.ensureDir(home, conflictPath)
-                  Utils.writeFile(conflictFile)(conflictData.bytes)
-                  server.hashes.update(conflictPath, Some(ServerData(conflictFile.lastModified, conflictData.newHash, Nil)))
 
-                  rejections = (subpath, reject)::rejections
-                  originals = (subpath, fileData)::originals
-                  conflictCopies = (conflictPath, Some(conflictData))::conflictCopies
+                  val fsConflictDir = FSDirectory(conflictPath)
+                  val conflictDir = Utils.newDir(home, conflictPath)
+                  server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
+
+                  val fsOrigFile = FSFile(dir.path)
+                  val contents = Utils.readFile(home, dir.path)
+
+                  val conflict = FTDirectory(fsConflictDir, None)
+                  val original = FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
+                  val reject = RejDirFile(dir, fsOrigFile, fData.hash)
+
+                  conflictCopies = conflict::conflictCopies
+                  originals = original::originals
+                  rejections = reject::rejections
                 }
+
+              }
+
+              case (None, Some(_)) => {
+
+                var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictDir = FSDirectory(conflictPath)
+                val conflictDir = Utils.newDir(home, conflictPath)
+                server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
+
+                val conflict = FTDirectory(fsConflictDir, None)
+                val reject = RejDirNone(dir)
+
+                conflictCopies = conflict::conflictCopies
+                rejections = reject::rejections
+              }
+
+              case (Some(dData: DirData), Some(flFile: FLFile)) => ()
+                // nothing to do here, self-correcting error
+
+              case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
+
+                var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictDir = FSDirectory(conflictPath)
+                val conflictDir = Utils.newDir(home, conflictPath)
+                server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
+
+                val fsOrigFile = FSFile(dir.path)
+                val contents = Utils.readFile(home, dir.path)
+
+                val conflict = FTDirectory(fsConflictDir, None)
+                val original = FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
+                val reject = RejDirFile(dir, fsOrigFile, fData.hash)
+
+                conflictCopies = conflict::conflictCopies
+                originals = original::originals
+                rejections = reject::rejections
+              }
+
+              case (Some(dData: DirData), None) => ()
+                // nothing to do here, self-correcting error
+
+              case (Some(fData: FileData), None) => {
+
+                var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictDir = FSDirectory(conflictPath)
+                val conflictDir = Utils.newDir(home, conflictPath)
+                server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
+
+                val fsOrigFile = FSFile(dir.path)
+                val contents = Utils.readFile(home, dir.path)
+
+                val conflict = FTDirectory(fsConflictDir, None)
+                val original = FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
+                val reject = RejDirFile(dir, fsOrigFile, fData.hash)
+
+                conflictCopies = conflict::conflictCopies
+                originals = original::originals
+                rejections = reject::rejections
               }
 
             }
+
+          }
+
+          case FTFile(fsFile, contents, hash, oldFSObj) => server.hashes.synchronized {
+            (server.hashes.lookupPath(file.path), oldFSObj) match {
+
+              case (None, None) => {
+                Utils.ensureDir(home, fsFile.path)
+                val file = Utils.newFile(home, fsFile.path)
+
+                Utils.writeFile(file)(contents)
+                server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
+                good = FTFile(file, contents, hash, oldFSObj)::good
+              }
+
+              case (Some(dData: DirData), Some(flDir: FLDirectory)) => {
+                val file = Utils.newFile(home, fsFile.path)
+                file.delete
+
+                Utils.writeFile(file)(contents)
+                server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
+                good = FTFile(file, contents, hash, oldFSObj)::good
+              }
+
+              case (Some(fData: FileData), Some(flFile: FLFile)) => {
+
+                if (Utils.verifyHash(fData.hash, flFile.hash)) {
+                  val file = Utils.newFile(home, fsFile.path)
+                  val chain = (fData.time, fData.hash)::fData.chain
+
+                  Utils.writeFile(file)(contents)
+                  server.hashes(fsFile) = FileData(file.lastModified, hash, chain)
+                  good = FTFile(file, contents, hash, oldFSObj)::good
+                }
+
+                else {
+                  var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
+                  var conflictCount = 0
+                  while (Utils.newFile(home, conflictPath).exists) {
+                    conflictCount += 1
+                    conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
+                  }
+
+                  val fsConflictFile = FSFile(conflictPath)
+                  val conflictFile = Utils.newFile(home, conflictPath)
+                  Utils.writeFile(conflictFile)(contents)
+                  server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+
+                  val origContents = Utils.readFile(home, fsFile.path)
+
+                  val conflict = FTFile(fsConflictFile, contents, hash, None)
+                  val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
+                  val reject = RejFileFile(fsFile, hash, fData.hash)
+
+                  conflictCopies = conflict::conflictCopies
+                  originals = original::originals
+                  rejections = reject::rejections
+                }
+
+              }
+
+              case (None, Some(_)) => {
+
+                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictFile = FSFile(conflictPath)
+                Utils.ensureDir(home, conflictPath)
+                val conflictFile = Utils.newFile(home, conflictPath)
+                Utils.writeFile(conflictFile)(contents)
+                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+
+                val conflict = FTFile(fsConflictFile, contents, hash, None)
+                val reject = RejDirNone(dir)
+
+                conflictCopies = conflict::conflictCopies
+                rejections = reject::rejections
+              }
+
+              case (Some(dData: DirData), Some(flFile: FLFile)) => {
+
+                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictFile = FSFile(conflictPath)
+                val conflictFile = Utils.newFile(home, conflictPath)
+                Utils.writeFile(conflictFile)(contents)
+                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+
+                val origDir = FSDirectory(fsFile.path)
+
+                val conflict = FTFile(fsConflictFile, contents, hash, None)
+                val original = FTDirectory(origDir, Some(FLFile(fsFile, hash)))
+                val reject = RejFileDir(fsFile, hash, origDir)
+
+                conflictCopies = conflict::conflictCopies
+                originals = original::originals
+                rejections = reject::rejections
+              }
+
+              case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
+
+                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictFile = FSFile(conflictPath)
+                val conflictFile = Utils.newFile(home, conflictPath)
+                Utils.writeFile(conflictFile)(contents)
+                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+
+                val origContents = Utils.readFile(home, dir.path)
+
+                val conflict = FTFile(fsConflictFile, contents, hash, None)
+                val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
+                val reject = RejFileFile(fsFile, hash, fData.hash)
+
+                conflictCopies = conflict::conflictCopies
+                originals = original::originals
+                rejections = reject::rejections
+              }
+
+              case (Some(dData: DirData), None) => {
+
+                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictFile = FSFile(conflictPath)
+                val conflictFile = Utils.newFile(home, conflictPath)
+                Utils.writeFile(conflictFile)(contents)
+                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+
+                val origDir = FSDirectory(fsFile.path)
+
+                val conflict = FTFile(fsConflictFile, contents, hash, None)
+                val original = FTDirectory(origDir, Some(FLFile(fsFile, hash)))
+                val reject = RejFileDir(fsFile, hash, origDir)
+
+                conflictCopies = conflict::conflictCopies
+                originals = original::originals
+                rejections = reject::rejections
+              }
+
+              case (Some(fData: FileData), None) => {
+
+                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
+                var conflictCount = 0
+                while (Utils.newFile(home, conflictPath).exists) {
+                  conflictCount += 1
+                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
+                }
+
+                val fsConflictFile = FSFile(conflictPath)
+                val conflictFile = Utils.newFile(home, conflictPath)
+                Utils.writeFile(conflictFile)(contents)
+                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+
+                val origContents = Utils.readFile(home, fsFile.path)
+
+                val conflict = FTFile(fsConflictFile, contents, hash, None)
+                val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
+                val reject = RejFileFile(fsFile, hash, fData.hash)
+
+                conflictCopies = conflict::conflictCopies
+                originals = original::originals
+                rejections = reject::rejections
+              }
+
+            }
+
           }
 
         }
@@ -150,24 +365,32 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
         }
         case _ => server.synchronized {
           message(RejectUpdateMessage(rejections))
-          message(FileMessage(originals ++ conflictCopies))
+          message(FSTransferMessage(originals ++ conflictCopies))
           server.clients.foreach { c =>
             if (!c.equals(this))
-              c.message(FileMessage(good ++ conflictCopies))
+              c.message(FSTransferMessage(good ++ conflictCopies))
           }
         }
       }
 
     }
 
-    case RemovedMessage(fileMap) => {
+    case FSRemovedMessage(removed) => {
 
-      fileMap.foreach { nameHash =>
-        // TODO(jacob) this synchronization is expensive...
-        server.hashes.synchronized {
-          server.hashes.remove(nameHash._1)
-          val file = Utils.newFile(home, nameHash._1)
-          Utils.dirDelete(file)
+      removed.foreach {
+        _ match {
+          case flDir: FLDirectory => server.hashes.synchronized {
+            server.hashes.remove(flDir.dir)
+            val rem = Utils.newFile(home, flDir.dir.path)
+            Utils.dirDelete(rem)
+          }
+
+          // TODO(jacob) should check hashes here
+          case flFile: FLFile => server.hashes.synchronized {
+            server.hashes.remove(flFile.file)
+            val rem = Utils.newFile(home, flFile.file.path)
+            Utils.dirDelete(rem)
+          }
         }
       }
 
