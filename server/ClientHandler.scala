@@ -414,31 +414,26 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     println("client connected: " + Utils.printSocket(client))
 
     // send client a list of file names and hashes
-    val fhList = server.hashes.toList.map {
-      _ match {
-        case (subpath, None) => (subpath, None)
-        case (subpath, Some(fileData)) => (subpath, Some(fileData.hash))
-      }
-    }
-
-    val listMsg = FileListMessage(fhList)
+    val listMsg = FSListMessage(server.hashes.flList)
     writeObject(listMsg)
 
     readObject match {
       case None => () // wait for termination
-      case Some(FileRequest(files)) => {
+      case Some(FSRequest(files)) => {
 
-        val fileList = files.map { filename =>
-          server.hashes(filename) match {
-            case None => (filename, None)
-            case Some(fileData) => {
-              val bytes = Utils.readFile(home, filename)
-              (filename, Some(FileMsgData(bytes, None, fileData.hash)))
+        val fileList = files.map {
+          _ match {
+            // TODO(jacob) just send None for oldFSObj? doesn't fit well
+            case fsDir: FSDirectory => FTDirectory(fsDir, None)
+            case fsFile: FSFile => {
+              val contents = Utils.readFile(home, fsFile.path)
+              val hash = server.hashes(fsFile).hash
+              FTFile(fsFile, contents, hash)
             }
           }
         }
 
-        val msg = FileMessage(fileList)
+        val msg = FSTransferMessage(fileList)
         writeObject(msg)
 
         readObject match {

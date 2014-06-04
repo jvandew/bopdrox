@@ -30,7 +30,7 @@ case class FTFile (val file: FSFile,
     extends FTData
 
 /** Transfer file contents over the wire */
-case class FSTransferMessage (val fsList: List[FTData])
+case class FSTransferMessage (val ftList: List[FTData])
     extends Message {
   private val serialVersionUID = 10000024601L
 }

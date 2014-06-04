@@ -56,7 +56,20 @@ class ServerMap {
   }
 
 
-  def update (fsObj: FSObject, data: ServerData) = {
+  def remove (fsObj: FSObject) : Unit = {
+    fsObj match {
+      case fsDir: FSDirectory => dirMap.remove(fsDir)
+      case fsFile: FSFile => fileMap.remove(fsFile)
+    }
+  }
+
+
+  def flList: List[FLData] =
+    dirMap.toList.map(FLDirectory(_._1)) ++
+    fileMap.toList.map(kv => FLFile(kv._1, kv._2.hash))
+
+
+  def update (fsObj: FSObject, data: ServerData) : Unit = {
     (fsObj, data) match {
       case (file: FSFile, fileData: FileData) => {
         dirMap.remove(FSDirectory(file.path))
