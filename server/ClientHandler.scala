@@ -1,7 +1,10 @@
 package bopdrox.server
 
-import bopdrox.util.{Ack, FSListMessage, FSTransferMessage, FSRemovedMessage,
-                     FSRequest, FTData, Rejection, RejectUpdateMessage, Utils}
+import bopdrox.util.{Ack, FLDirectory, FLFile, FSDirectory, FSFile, FSListMessage,
+                     FSTransferMessage, FSRemovedMessage, FSRequest, FTData,
+                     FTDirectory, FTFile, Message, RejDirFile, RejDirNone,
+                     Rejection, RejectUpdateMessage, RejFileDir, RejFileFile,
+                     RejFileNone, Utils}
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 
@@ -34,14 +37,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
    * update is atomic. */
   private def matchMessage (msg: Message) : Unit = msg match {
 
-    case FSTransferMessage(fsList) => {
+    case FSTransferMessage(ftList) => {
 
       var rejections = List[Rejection]()
       var originals = List[FTData]()
       var conflictCopies = List[FTData]()
       var good = List[FTData]()
 
-      fsList.foreach {
+      ftList.foreach {
         _ match {
           case FTDirectory(dir, oldFSObj) => server.hashes.synchronized {
             (server.hashes.lookupPath(dir.path), oldFSObj) match {
@@ -57,9 +60,9 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), Some(flFile: FLFile)) => {
 
-                if (Utils.verifyHash(fData.hash, flFile.hash)) {
+                if (Utils.verifyHash(fData.hash)(flFile.hash)) {
                   val emptyDir = Utils.newDir(home, dir.path)
-                  server.hashes(dir) = emptyDir.lastModified
+                  server.hashes(dir) = DirData(emptyDir.lastModified)
                   good = FTDirectory(dir, oldFSObj)::good
                 }
 
@@ -170,7 +173,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
           }
 
           case FTFile(fsFile, contents, hash, oldFSObj) => server.hashes.synchronized {
-            (server.hashes.lookupPath(file.path), oldFSObj) match {
+            (server.hashes.lookupPath(fsFile.path), oldFSObj) match {
 
               case (None, None) => {
                 Utils.ensureDir(home, fsFile.path)
@@ -178,7 +181,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
                 Utils.writeFile(file)(contents)
                 server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
-                good = FTFile(file, contents, hash, oldFSObj)::good
+                good = FTFile(fsFile, contents, hash, oldFSObj)::good
               }
 
               case (Some(dData: DirData), Some(flDir: FLDirectory)) => {
@@ -187,18 +190,18 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
                 Utils.writeFile(file)(contents)
                 server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
-                good = FTFile(file, contents, hash, oldFSObj)::good
+                good = FTFile(fsFile, contents, hash, oldFSObj)::good
               }
 
               case (Some(fData: FileData), Some(flFile: FLFile)) => {
 
-                if (Utils.verifyHash(fData.hash, flFile.hash)) {
+                if (Utils.verifyHash(fData.hash)(flFile.hash)) {
                   val file = Utils.newFile(home, fsFile.path)
                   val chain = (fData.time, fData.hash)::fData.chain
 
                   Utils.writeFile(file)(contents)
                   server.hashes(fsFile) = FileData(file.lastModified, hash, chain)
-                  good = FTFile(file, contents, hash, oldFSObj)::good
+                  good = FTFile(fsFile, contents, hash, oldFSObj)::good
                 }
 
                 else {
@@ -243,7 +246,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
 
                 val conflict = FTFile(fsConflictFile, contents, hash, None)
-                val reject = RejDirNone(dir)
+                val reject = RejFileNone(fsFile, hash)
 
                 conflictCopies = conflict::conflictCopies
                 rejections = reject::rejections
@@ -288,7 +291,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 Utils.writeFile(conflictFile)(contents)
                 server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
 
-                val origContents = Utils.readFile(home, dir.path)
+                val origContents = Utils.readFile(home, fsFile.path)
 
                 val conflict = FTFile(fsConflictFile, contents, hash, None)
                 val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
@@ -427,8 +430,8 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
             case fsDir: FSDirectory => FTDirectory(fsDir, None)
             case fsFile: FSFile => {
               val contents = Utils.readFile(home, fsFile.path)
-              val hash = server.hashes(fsFile).hash
-              FTFile(fsFile, contents, hash)
+              val hash = server.hashes.applyFile(fsFile).hash
+              FTFile(fsFile, contents, hash, None)
             }
           }
         }

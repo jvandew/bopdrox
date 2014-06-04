@@ -1,6 +1,6 @@
 package bopdrox.server
 
-import bopdrox.util.{FileHash, FSDirectory, FSFile, FSObject, FSPath, Timestamp}
+import bopdrox.util.{FileHash, FLData, FLDirectory, FLFile, FSDirectory, FSFile, FSObject, FSPath, Timestamp}
 import scala.collection.mutable.HashMap
 
 /** A Server stores a timestamp for all objects, with an additional file hash
@@ -13,8 +13,9 @@ sealed trait ServerData {
 case class FileData (val time: Timestamp,
                      val hash: FileHash,
                      val chain: List[(Timestamp, FileHash)])
+    extends ServerData
 
-case class DirData (val time: Timestamp)
+case class DirData (val time: Timestamp) extends ServerData
 
 
 /** A ServerMap is essentially a pair of HashMaps, one for storing file information
@@ -65,7 +66,7 @@ class ServerMap {
 
 
   def flList: List[FLData] =
-    dirMap.toList.map(FLDirectory(_._1)) ++
+    dirMap.toList.map(kv => FLDirectory(kv._1)) ++
     fileMap.toList.map(kv => FLFile(kv._1, kv._2.hash))
 
 
@@ -80,6 +81,8 @@ class ServerMap {
         fileMap.remove(FSFile(dir.path))
         dirMap(dir) = dirData
       }
+
+      case _ => throw new IllegalArgumentException("Data type and FSObject type must match.")
     }
   }
 
