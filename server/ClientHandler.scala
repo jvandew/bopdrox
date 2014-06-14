@@ -67,12 +67,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 }
 
                 else {
-                  var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
-                  var conflictCount = 0
-                  while (Utils.newFile(home, conflictPath).exists) {
-                    conflictCount += 1
-                    conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
-                  }
+                  val conflictPath = Utils.conflictedPath(home, dir.path)
 
                   val fsConflictDir = FSDirectory(conflictPath)
                   val conflictDir = Utils.newDir(home, conflictPath)
@@ -94,13 +89,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (None, Some(_)) => {
 
-                var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, dir.path)
                 val fsConflictDir = FSDirectory(conflictPath)
                 val conflictDir = Utils.newDir(home, conflictPath)
                 server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
@@ -117,13 +106,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
 
-                var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, dir.path)
                 val fsConflictDir = FSDirectory(conflictPath)
                 val conflictDir = Utils.newDir(home, conflictPath)
                 server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
@@ -145,13 +128,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), None) => {
 
-                var conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = dir.path.updated(dir.path.size - 1, dir.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, dir.path)
                 val fsConflictDir = FSDirectory(conflictPath)
                 val conflictDir = Utils.newDir(home, conflictPath)
                 server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
@@ -205,13 +182,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 }
 
                 else {
-                  var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
-                  var conflictCount = 0
-                  while (Utils.newFile(home, conflictPath).exists) {
-                    conflictCount += 1
-                    conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
-                  }
-
+                  val conflictPath = Utils.conflictedPath(home, fsFile.path)
                   val fsConflictFile = FSFile(conflictPath)
                   val conflictFile = Utils.newFile(home, conflictPath)
                   Utils.writeFile(conflictFile)(contents)
@@ -232,13 +203,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (None, Some(_)) => {
 
-                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, fsFile.path)
                 val fsConflictFile = FSFile(conflictPath)
                 Utils.ensureDir(home, conflictPath)
                 val conflictFile = Utils.newFile(home, conflictPath)
@@ -254,13 +219,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(dData: DirData), Some(flFile: FLFile)) => {
 
-                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, fsFile.path)
                 val fsConflictFile = FSFile(conflictPath)
                 val conflictFile = Utils.newFile(home, conflictPath)
                 Utils.writeFile(conflictFile)(contents)
@@ -279,13 +238,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
 
-                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, fsFile.path)
                 val fsConflictFile = FSFile(conflictPath)
                 val conflictFile = Utils.newFile(home, conflictPath)
                 Utils.writeFile(conflictFile)(contents)
@@ -304,13 +257,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(dData: DirData), None) => {
 
-                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, fsFile.path)
                 val fsConflictFile = FSFile(conflictPath)
                 val conflictFile = Utils.newFile(home, conflictPath)
                 Utils.writeFile(conflictFile)(contents)
@@ -329,13 +276,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), None) => {
 
-                var conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc")
-                var conflictCount = 0
-                while (Utils.newFile(home, conflictPath).exists) {
-                  conflictCount += 1
-                  conflictPath = fsFile.path.updated(fsFile.path.size - 1, fsFile.path.last + "-cc" + conflictCount)
-                }
-
+                val conflictPath = Utils.conflictedPath(home, fsFile.path)
                 val fsConflictFile = FSFile(conflictPath)
                 val conflictFile = Utils.newFile(home, conflictPath)
                 Utils.writeFile(conflictFile)(contents)

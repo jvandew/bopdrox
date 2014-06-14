@@ -41,6 +41,19 @@ object Utils {
     }
   }
 
+  // Find an unused path for a conflicted copy of a file or directory.
+  // Not thread-safe
+  def conflictedPath (home: File) (path: FSPath) : FSPath = {
+    var conflictPath = path.updated(path.size - 1, path.last + "-cc")
+    var conflictCount = 0
+    while (Utils.newFile(home, conflictPath).exists) {
+      conflictCount += 1
+      conflictPath = path.updated(path.size - 1, path.last + "-cc" + conflictCount)
+    }
+
+    conflictPath
+  }
+
   // get the contents of a file and its hash value in that order
   def contentsAndHash (file: File) : (FileBytes, FileHash) = {
     val bytes = readFile(file)
