@@ -10,9 +10,15 @@ sealed trait Message
 case object Ack extends Message
 
 
-sealed trait FLData
-case class FLFile (val file: FSFile, val hash: FileHash) extends FLData
-case class FLDirectory (val dir: FSDirectory) extends FLData
+sealed trait FLData {
+  val fsObj: FSObject
+}
+case class FLDirectory (val dir: FSDirectory) extends FLData {
+  val fsObj = dir
+}
+case class FLFile (val file: FSFile, val hash: FileHash) extends FLData {
+  val fsObj = file
+}
 
 /** Send a list of FSObjects with file hashes over the wire */
 case class FSListMessage (val fsList: List[FLData]) extends Message {

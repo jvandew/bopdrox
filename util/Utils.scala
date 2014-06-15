@@ -188,16 +188,19 @@ object Utils {
   }
 
   // create a new directory, replacing any existing file
-  def newDir (home: File, subpath: FSPath) : File = {
-    val emptyDir = Utils.newFile(home, subpath)
+  def newDir (home: File, dir: FSDirectory) : File = {
+    val emptyDir = Utils.newFile(home, dir.path)
     if (emptyDir.exists) emptyDir.delete
     emptyDir.mkdirs
 
     emptyDir
   }
 
+  // create a new file
+  def newFile (home: File, fsFile: FSFile) : File = newFile(home, fsFile.path)
+
   // shortcut method to create a File object using our List subpath format
-  def newFile (home: File, subpath: FSPath) : File = {
+  private def newFile (home: File, subpath: FSPath) : File = {
     subpath match {
       case Nil => home
       case path => new File(home, joinPath(path))

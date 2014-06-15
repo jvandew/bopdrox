@@ -1,10 +1,10 @@
 package bopdrox.server
 
-import bopdrox.util.{Ack, FileBytes, FileHash, FLDirectory, FLFile, FSDirectory, FSFile, FSListMessage,
-                     FSTransferMessage, FSRemovedMessage, FSRequest, FTData,
-                     FTDirectory, FTFile, Message, RejDirFile, RejDirNone,
-                     Rejection, RejectUpdateMessage, RejFileDir, RejFileFile,
-                     RejFileNone, Utils}
+import bopdrox.util.{Ack, FileBytes, FileHash, FLDirectory, FLFile, FSDirectory,
+                     FSFile, FSListMessage, FSTransferMessage, FSRemovedMessage,
+                     FSRequest, FTData, FTDirectory, FTFile, Message, RejDirFile,
+                     RejDirNone, Rejection, RejectUpdateMessage, RejFileDir,
+                     RejFileFile, RejFileNone, Utils}
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 

@@ -22,9 +22,7 @@ object Client {
 
 class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
-  // store file hashes of the most recent version
-  // TODO(jacob) include version vectors at some point
-  val hashes = new HashMap[List[String], Option[ClientData]]
+  val hashes = new ClientMap
 
   val getRelPath = Utils.getRelativePath(home)_
 
@@ -33,42 +31,40 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
   private var open = false
 
+
   // disconnect handler
   private[client] def disconnect (ioe: IOException) : Unit = sys.exit
 
-  var sock: Socket = null
 
   def isOpen : Boolean = open
+
 
   // note this method is not called asnchronously
   private def matchMessage (msg: Message) : Unit = msg match {
 
-    case FileMessage(fileContents) => {
+    case FSTransferMessage(ftList) => {
 
-      // TODO(jacob) this code is mostly copy-pasted from ClientHandler. fix
-      fileContents.foreach {
+      ftList.foreach {
         _ match {
 
-          // directory
-          case (subpath, None) => {
-            val emptyDir = Utils.newFile(home, subpath)
-            if (emptyDir.exists) emptyDir.delete  // delete if this was previously a file
-            emptyDir.mkdirs
-            hashes.update(subpath, None)
+          // TODO(jacob) should probably check oldFSObj eventually
+          case FTDirectory(dir, _) => {
+            val emptyDir = Utils.newDir(home, dir)
+            hashes(dir) = DirData(emptyDir.lastModified)
           }
 
-          // file
-          case (subpath, Some(msgData)) => {
-            val file = Utils.newFile(home, subpath)
+          // TODO(jacob) should probably check oldFSObj eventually
+          case FTFile(fsFile, contents, hash, _) => {
+            val file = Utils.newFile(home, fsFile)
 
-            hashes.get(subpath) match {
-              case None => Utils.ensureDir(home, subpath)
-              case Some(None) => file.delete // directory is now a file
-              case Some(Some(_)) => () // updated file
+            hashes.lookupPath(fsFile.path) match {
+              case None => Utils.ensureDir(home, fsFile.path)
+              case Some(FileData) => ()
+              case Some(DirData) => file.delete
             }
 
-            Utils.writeFile(file)(msgData.bytes)
-            hashes.update(subpath, Some(ClientData(file.lastModified, msgData.newHash)))
+            Utils.writeFile(file)(contents)
+            hashes(fsFile) = FileData(file.lastModified, hash)
           }
         }
 
@@ -77,10 +73,15 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
     case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
 
-    case RemovedMessage(fileMap) => {
-      fileMap.foreach { nameHash =>
-        hashes.remove(nameHash._1)
-        val file = Utils.newFile(home, nameHash._1)
+    case FSRemovedMessage(removed) => {
+
+      removed.foreach { rem =>
+        val (fsObj, file) = rem match {
+          case FLFile(fsFile, _) => (fsFile, Utils.newFile(home, fsFile))
+          case FLDirectory(fsDir) => (fsDir, Utils.newDir(home, fsDir))
+        }
+
+        hashes.remove(fsObj)
         Utils.dirDelete(file)
       }
     }
@@ -88,10 +89,10 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
     case _ => throw new IOException("Unknown or incorrect message received")
   }
 
+
   def run : Unit = {
 
     val serv = new Socket(host, port)
-    sock = serv
     val out = new ObjectOutputStream(serv.getOutputStream)
     val in = new ObjectInputStream(serv.getInputStream)
 
@@ -99,52 +100,59 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
     val writeObject = Utils.checkedWrite(disconnect)(out)_
 
     // get list of files and hashes from server
-    // TODO(jacob) currently assume Client files are a subset of Server files
+    // TODO(jacob) currently assumes Client files are a subset of Server files
     readObject match {
       case None => () // wait for termination
-      case Some(FileListMessage(fileList)) => {
+      case Some(FSListMessage(fsList)) => {
 
         // generate local file list and hashes
         Utils.dirForeach(home) { file =>
           val hash = Utils.hashFile(file)
-          hashes.update(getRelPath(file), Some(ClientData(file.lastModified, hash)))
+          val time = file.lastModified
+          val fsFile = FSFile(getRelPath(file))
+
+          hashes(fsFile) = FileData(time, hash)
         }
         { dir =>
-          hashes.update(getRelPath(dir), None)
+          val time = dir.lastModified
+          val fsDir = FSDirectory(getRelPath(dir))
+
+          hashes(fsDir) = DirData(time)
         }
 
-        val filtered = fileList.filter(nh =>
-          (hashes.get(nh._1), nh._2) match {
-            case (None, _) => true  // file or folder not present on client
-            case (Some(None), None) => false  // folders match
-            case (Some(None), Some(_)) => true  // folder on client is now file on server
-            case (Some(Some(_)), None) => true  // file on client is now folder on server
-            case (Some(Some(ClientData(_, hash1))), Some(hash2)) => !Utils.verifyBytes(hash1)(hash2)
+        val filtered = fsList.filter { flData =>
+          (flData, hashes.lookupPath(flData.fsObj.path)) match {
+            case (_, None) => true
+            case (FLDirectory, Some(DirData)) => false
+            case (FLDirectory, Some(FileData)) => true
+            case (FLFile, Some(DirData)) => true
+            case (FLFile(_, hash1), FileData(_, hash2)) => !Utils.verifyHash(hash1)(hash2)
           }
-        )
-        val msg = FileRequest(filtered.map(_._1))
+        }
+
+        val msg = FSRequest(filtered.map(_.fsObj))
         writeObject(msg)
 
         readObject match {
           case None => () // wait for termination
-          case Some(FileMessage(fileContents)) => {
+          case Some(FSTransferMessage(ftList)) => {
 
             // Process list of new files
-            // TODO(jacob) also mostly copy-pasted
-            fileContents.foreach {
+            ftList.foreach {
               _ match {
-                // empty directory
-                case (subpath, None) => {
-                  val emptyDir = Utils.newFile(home, subpath)
-                  emptyDir.mkdirs
-                  hashes.update(subpath, None)
+
+                case FTDirectory(dir, _) => {
+                  val emptyDir = Utils.newDir(home, dir)
+                  hashes(dir) = DirData(emptyDir.lastModified)
                 }
-                // normal file
-                case (subpath, Some(fileData)) => {
+
+                case FTFile(fsFile, contents, hash, _) => {
+
                   Utils.ensureDir(home, subpath)
-                  val file = Utils.newFile(home, subpath)
-                  Utils.writeFile(file)(fileData.bytes)
-                  hashes.update(subpath, Some(ClientData(file.lastModified, fileData.newHash)))
+                  val file = Utils.newFile(home, fsFile)
+
+                  Utils.writeFile(file)(contents)
+                  hashes(fsFile) = FileData(file.lastModified, hash)
                 }
               }
             }
