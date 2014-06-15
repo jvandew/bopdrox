@@ -1,6 +1,6 @@
 package bopdrox.server
 
-import bopdrox.util.{Ack, FLDirectory, FLFile, FSDirectory, FSFile, FSListMessage,
+import bopdrox.util.{Ack, FileBytes, FileHash, FLDirectory, FLFile, FSDirectory, FSFile, FSListMessage,
                      FSTransferMessage, FSRemovedMessage, FSRequest, FTData,
                      FTDirectory, FTFile, Message, RejDirFile, RejDirNone,
                      Rejection, RejectUpdateMessage, RejFileDir, RejFileFile,
@@ -22,14 +22,45 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
   // continue running this handler
   private var continue = true
 
+
+  private def conflictDir (dir: FSDirectory) : FSDirectory = {
+
+    val conflictPath = Utils.conflictedPath(home)(dir.path)
+    val fsConflictDir = FSDirectory(conflictPath)
+
+    Utils.ensureDir(home, conflictPath)
+    val conflictDir = Utils.newDir(home, conflictPath)
+    server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
+
+    fsConflictDir
+  }
+
+
+  private def conflictFile (fsFile: FSFile, contents: FileBytes, hash: FileHash) : FSFile = {
+
+    val conflictPath = Utils.conflictedPath(home)(fsFile.path)
+    val fsConflictFile = FSFile(conflictPath)
+
+    Utils.ensureDir(home, conflictPath)
+    val conflictedFile = Utils.newFile(home, conflictPath)
+
+    Utils.writeFile(conflictedFile)(contents)
+    server.hashes(fsConflictFile) = FileData(conflictedFile.lastModified, hash, Nil)
+
+    fsConflictFile
+  }
+
+
   // disconnect client and mark handler to terminate
   private def disconnect (ioe: IOException) : Unit = {
     server.dropClient(this)
     continue = false
   }
 
+
   private def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
   private val writeObject = Utils.checkedWrite(disconnect)(out)_
+
 
   /* Handle message matching and file operations. Note that due the variable
    * nature of network communications it does not make sense to enforce FIFO
@@ -50,9 +81,11 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
             (server.hashes.lookupPath(dir.path), oldFSObj) match {
 
               case (None, None) => {
+
                 val emptyDir = Utils.newDir(home, dir.path)
                 server.hashes(dir) = DirData(emptyDir.lastModified)
-                good = FTDirectory(dir, oldFSObj)::good
+
+                good ::= FTDirectory(dir, oldFSObj)
               }
 
               case (Some(dData: DirData), Some(flDir: FLDirectory)) => ()
@@ -63,42 +96,27 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 if (Utils.verifyHash(fData.hash)(flFile.hash)) {
                   val emptyDir = Utils.newDir(home, dir.path)
                   server.hashes(dir) = DirData(emptyDir.lastModified)
-                  good = FTDirectory(dir, oldFSObj)::good
+
+                  good ::= FTDirectory(dir, oldFSObj)
                 }
 
                 else {
-                  val conflictPath = Utils.conflictedPath(home, dir.path)
-
-                  val fsConflictDir = FSDirectory(conflictPath)
-                  val conflictDir = Utils.newDir(home, conflictPath)
-                  server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
-
+                  val fsConflictDir = conflictDir(dir)
                   val fsOrigFile = FSFile(dir.path)
                   val contents = Utils.readFile(home, dir.path)
 
-                  val conflict = FTDirectory(fsConflictDir, None)
-                  val original = FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
-                  val reject = RejDirFile(dir, fsOrigFile, fData.hash)
-
-                  conflictCopies = conflict::conflictCopies
-                  originals = original::originals
-                  rejections = reject::rejections
+                  conflictCopies ::= FTDirectory(fsConflictDir, None)
+                  originals ::= FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
+                  rejections ::= RejDirFile(dir, fsOrigFile, fData.hash)
                 }
-
               }
 
               case (None, Some(_)) => {
 
-                val conflictPath = Utils.conflictedPath(home, dir.path)
-                val fsConflictDir = FSDirectory(conflictPath)
-                val conflictDir = Utils.newDir(home, conflictPath)
-                server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
+                val fsConflictDir = conflictDir(dir)
 
-                val conflict = FTDirectory(fsConflictDir, None)
-                val reject = RejDirNone(dir)
-
-                conflictCopies = conflict::conflictCopies
-                rejections = reject::rejections
+                conflictCopies ::= FTDirectory(fsConflictDir, None)
+                rejections ::= RejDirNone(dir)
               }
 
               case (Some(dData: DirData), Some(flFile: FLFile)) => ()
@@ -106,21 +124,13 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
 
-                val conflictPath = Utils.conflictedPath(home, dir.path)
-                val fsConflictDir = FSDirectory(conflictPath)
-                val conflictDir = Utils.newDir(home, conflictPath)
-                server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
-
+                val fsConflictDir = conflictDir(dir)
                 val fsOrigFile = FSFile(dir.path)
                 val contents = Utils.readFile(home, dir.path)
 
-                val conflict = FTDirectory(fsConflictDir, None)
-                val original = FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
-                val reject = RejDirFile(dir, fsOrigFile, fData.hash)
-
-                conflictCopies = conflict::conflictCopies
-                originals = original::originals
-                rejections = reject::rejections
+                conflictCopies ::= FTDirectory(fsConflictDir, None)
+                originals ::= FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
+                rejections ::= RejDirFile(dir, fsOrigFile, fData.hash)
               }
 
               case (Some(dData: DirData), None) => ()
@@ -128,21 +138,13 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(fData: FileData), None) => {
 
-                val conflictPath = Utils.conflictedPath(home, dir.path)
-                val fsConflictDir = FSDirectory(conflictPath)
-                val conflictDir = Utils.newDir(home, conflictPath)
-                server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
-
+                val fsConflictDir = conflictDir(dir)
                 val fsOrigFile = FSFile(dir.path)
                 val contents = Utils.readFile(home, dir.path)
 
-                val conflict = FTDirectory(fsConflictDir, None)
-                val original = FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
-                val reject = RejDirFile(dir, fsOrigFile, fData.hash)
-
-                conflictCopies = conflict::conflictCopies
-                originals = original::originals
-                rejections = reject::rejections
+                conflictCopies ::= FTDirectory(fsConflictDir, None)
+                originals ::= FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))
+                rejections ::= RejDirFile(dir, fsOrigFile, fData.hash)
               }
 
             }
@@ -153,21 +155,25 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
             (server.hashes.lookupPath(fsFile.path), oldFSObj) match {
 
               case (None, None) => {
+
                 Utils.ensureDir(home, fsFile.path)
                 val file = Utils.newFile(home, fsFile.path)
 
                 Utils.writeFile(file)(contents)
                 server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
-                good = FTFile(fsFile, contents, hash, oldFSObj)::good
+
+                good ::= FTFile(fsFile, contents, hash, oldFSObj)
               }
 
               case (Some(dData: DirData), Some(flDir: FLDirectory)) => {
+
                 val file = Utils.newFile(home, fsFile.path)
                 file.delete
 
                 Utils.writeFile(file)(contents)
                 server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
-                good = FTFile(fsFile, contents, hash, oldFSObj)::good
+
+                good ::= FTFile(fsFile, contents, hash, oldFSObj)
               }
 
               case (Some(fData: FileData), Some(flFile: FLFile)) => {
@@ -178,119 +184,66 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
                   Utils.writeFile(file)(contents)
                   server.hashes(fsFile) = FileData(file.lastModified, hash, chain)
-                  good = FTFile(fsFile, contents, hash, oldFSObj)::good
+
+                  good ::= FTFile(fsFile, contents, hash, oldFSObj)
                 }
 
                 else {
-                  val conflictPath = Utils.conflictedPath(home, fsFile.path)
-                  val fsConflictFile = FSFile(conflictPath)
-                  val conflictFile = Utils.newFile(home, conflictPath)
-                  Utils.writeFile(conflictFile)(contents)
-                  server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
-
+                  val fsConflictFile = conflictFile(fsFile, contents, hash)
                   val origContents = Utils.readFile(home, fsFile.path)
 
-                  val conflict = FTFile(fsConflictFile, contents, hash, None)
-                  val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
-                  val reject = RejFileFile(fsFile, hash, fData.hash)
-
-                  conflictCopies = conflict::conflictCopies
-                  originals = original::originals
-                  rejections = reject::rejections
+                  conflictCopies ::= FTFile(fsConflictFile, contents, hash, None)
+                  originals ::= FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
+                  rejections ::= RejFileFile(fsFile, hash, fData.hash)
                 }
-
               }
 
               case (None, Some(_)) => {
 
-                val conflictPath = Utils.conflictedPath(home, fsFile.path)
-                val fsConflictFile = FSFile(conflictPath)
-                Utils.ensureDir(home, conflictPath)
-                val conflictFile = Utils.newFile(home, conflictPath)
-                Utils.writeFile(conflictFile)(contents)
-                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
+                val fsConflictFile = conflictFile(fsFile, contents, hash)
 
-                val conflict = FTFile(fsConflictFile, contents, hash, None)
-                val reject = RejFileNone(fsFile, hash)
-
-                conflictCopies = conflict::conflictCopies
-                rejections = reject::rejections
+                conflictCopies ::= FTFile(fsConflictFile, contents, hash, None)
+                rejections ::= RejFileNone(fsFile, hash)
               }
 
               case (Some(dData: DirData), Some(flFile: FLFile)) => {
 
-                val conflictPath = Utils.conflictedPath(home, fsFile.path)
-                val fsConflictFile = FSFile(conflictPath)
-                val conflictFile = Utils.newFile(home, conflictPath)
-                Utils.writeFile(conflictFile)(contents)
-                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
-
+                val fsConflictFile = conflictFile(fsFile, contents, hash)
                 val origDir = FSDirectory(fsFile.path)
 
-                val conflict = FTFile(fsConflictFile, contents, hash, None)
-                val original = FTDirectory(origDir, Some(FLFile(fsFile, hash)))
-                val reject = RejFileDir(fsFile, hash, origDir)
-
-                conflictCopies = conflict::conflictCopies
-                originals = original::originals
-                rejections = reject::rejections
+                conflictCopies ::= FTFile(fsConflictFile, contents, hash, None)
+                originals ::= FTDirectory(origDir, Some(FLFile(fsFile, hash)))
+                rejections ::= RejFileDir(fsFile, hash, origDir)
               }
 
               case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
 
-                val conflictPath = Utils.conflictedPath(home, fsFile.path)
-                val fsConflictFile = FSFile(conflictPath)
-                val conflictFile = Utils.newFile(home, conflictPath)
-                Utils.writeFile(conflictFile)(contents)
-                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
-
+                val fsConflictFile = conflictFile(fsFile, contents, hash)
                 val origContents = Utils.readFile(home, fsFile.path)
 
-                val conflict = FTFile(fsConflictFile, contents, hash, None)
-                val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
-                val reject = RejFileFile(fsFile, hash, fData.hash)
-
-                conflictCopies = conflict::conflictCopies
-                originals = original::originals
-                rejections = reject::rejections
+                conflictCopies ::= FTFile(fsConflictFile, contents, hash, None)
+                originals ::= FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
+                rejections ::= RejFileFile(fsFile, hash, fData.hash)
               }
 
               case (Some(dData: DirData), None) => {
 
-                val conflictPath = Utils.conflictedPath(home, fsFile.path)
-                val fsConflictFile = FSFile(conflictPath)
-                val conflictFile = Utils.newFile(home, conflictPath)
-                Utils.writeFile(conflictFile)(contents)
-                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
-
+                val fsConflictFile = conflictFile(fsFile, contents, hash)
                 val origDir = FSDirectory(fsFile.path)
 
-                val conflict = FTFile(fsConflictFile, contents, hash, None)
-                val original = FTDirectory(origDir, Some(FLFile(fsFile, hash)))
-                val reject = RejFileDir(fsFile, hash, origDir)
-
-                conflictCopies = conflict::conflictCopies
-                originals = original::originals
-                rejections = reject::rejections
+                conflictCopies ::= FTFile(fsConflictFile, contents, hash, None)
+                originals ::= FTDirectory(origDir, Some(FLFile(fsFile, hash)))
+                rejections ::= RejFileDir(fsFile, hash, origDir)
               }
 
               case (Some(fData: FileData), None) => {
 
-                val conflictPath = Utils.conflictedPath(home, fsFile.path)
-                val fsConflictFile = FSFile(conflictPath)
-                val conflictFile = Utils.newFile(home, conflictPath)
-                Utils.writeFile(conflictFile)(contents)
-                server.hashes(fsConflictFile) = FileData(conflictFile.lastModified, hash, Nil)
-
+                val fsConflictFile = conflictFile(fsFile, contents, hash)
                 val origContents = Utils.readFile(home, fsFile.path)
 
-                val conflict = FTFile(fsConflictFile, contents, hash, None)
-                val original = FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
-                val reject = RejFileFile(fsFile, hash, fData.hash)
-
-                conflictCopies = conflict::conflictCopies
-                originals = original::originals
-                rejections = reject::rejections
+                conflictCopies ::= FTFile(fsConflictFile, contents, hash, None)
+                originals ::= FTFile(fsFile, origContents, fData.hash, Some(FLFile(fsFile, hash)))
+                rejections ::= RejFileFile(fsFile, hash, fData.hash)
               }
 
             }
@@ -351,7 +304,9 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     case _ => throw new IOException("Unknown or incorrect message received")
   }
 
+
   def message (msg: Message) : Unit = writeObject(msg)
+
 
   def run : Unit = {
 
