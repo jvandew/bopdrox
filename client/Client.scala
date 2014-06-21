@@ -1,8 +1,9 @@
 package bopdrox.client
 
-import bopdrox.msg.{Ack, FileListMessage, FileMessage, FileMsgData, FileRequest,
-                    Message, RejectUpdateMessage, RemovedMessage}
-import bopdrox.util.Utils
+import bopdrox.util.{Ack, FLData, FLDirectory, FLFile, FSDirectory, FSFile,
+                     FSListMessage, FSRemovedMessage, FSRequest,
+                     FSTransferMessage, FTData, FTDirectory, FTFile, Message,
+                     RejectUpdateMessage, Utils}
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.{HashMap, Queue}
@@ -59,8 +60,8 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
             hashes.lookupPath(fsFile.path) match {
               case None => Utils.ensureDir(home, fsFile.path)
-              case Some(FileData) => ()
-              case Some(DirData) => file.delete
+              case Some(FileData(_, _)) => ()
+              case Some(DirData(_)) => file.delete
             }
 
             Utils.writeFile(file)(contents)
@@ -123,10 +124,10 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
         val filtered = fsList.filter { flData =>
           (flData, hashes.lookupPath(flData.fsObj.path)) match {
             case (_, None) => true
-            case (FLDirectory, Some(DirData)) => false
-            case (FLDirectory, Some(FileData)) => true
-            case (FLFile, Some(DirData)) => true
-            case (FLFile(_, hash1), FileData(_, hash2)) => !Utils.verifyHash(hash1)(hash2)
+            case (FLDirectory(_), Some(DirData(_))) => false
+            case (FLDirectory(_), Some(FileData(_, _))) => true
+            case (FLFile(_, _), Some(DirData(_))) => true
+            case (FLFile(_, hash1), Some(FileData(_, hash2))) => !Utils.verifyHash(hash1)(hash2)
           }
         }
 
@@ -148,7 +149,7 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
                 case FTFile(fsFile, contents, hash, _) => {
 
-                  Utils.ensureDir(home, subpath)
+                  Utils.ensureDir(home, fsFile.path)
                   val file = Utils.newFile(home, fsFile)
 
                   Utils.writeFile(file)(contents)
@@ -179,83 +180,124 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
         matchMessage(messageQueue.dequeue)
 
       var keySet = hashes.keySet
-      var updates = List[(List[String], Option[FileMsgData])]()
+      var updates = List[FTData]()
 
-      // TODO(jacob) doing this asynchronously might be worthwhile. sleep on it
       Utils.dirForeach(home) { file =>
+
         val path = getRelPath(file)
-        keySet = keySet - path
+        val fsFile = FSFile(path)
 
-        val (update, oldHash) = {
-          if (!hashes.contains(path))
-            (true, None)
-          else
-            hashes(path) match {
-              case None => (true, None)   // formerly a directory
-              case Some(fileData) =>
-                if (fileData.time != file.lastModified)
-                  (true, Some(fileData.hash))
-                else
-                  (false, None)
+        hashes.lookupPath(path) match {
+
+          case None => {
+            val (bytes, hash) = Utils.contentsAndHash(file)
+
+            hashes(fsFile) = FileData(file.lastModified, hash)
+            updates ::= FTFile(fsFile, bytes, hash, None)
+          }
+
+          case Some(fileData: FileData) => {
+
+            // TODO(jacob) it's extremely unlikely that changing the system
+            //             clock could break this check
+            if (fileData.time != file.lastModified) {
+
+              val oldFSObj = FLFile(fsFile, fileData.hash)
+              val (bytes, hash) = Utils.contentsAndHash(file)
+
+              hashes(fsFile) = FileData(file.lastModified, hash)
+              updates ::= FTFile(fsFile, bytes, hash, Some(oldFSObj))
+              keySet -= fsFile
             }
-        }
+            else {
 
-        if (update) {
-          // TODO(jacob) this call is not thread-safe and will very rarely crash the client
-          val (bytes, hash) = Utils.contentsAndHash(file)
-          hashes.update(path, Some(ClientData(file.lastModified, hash)))
-          updates = (path, Some(FileMsgData(bytes, oldHash, hash)))::updates
-        }
+              val (bytes, hash) = Utils.contentsAndHash(file)
 
+              hashes(fsFile) = FileData(file.lastModified, hash)
+              updates ::= FTFile(fsFile, bytes, hash, None)
+              keySet -= fsFile
+            }
+          }
+
+          case Some(dirData) => {
+
+            val fsDir = FSDirectory(path)
+            val oldFSObj = FLDirectory(fsDir)
+            val (bytes, hash) = Utils.contentsAndHash(file)
+
+            hashes.remove(fsDir)
+            hashes(fsFile) = FileData(file.lastModified, hash)
+            updates ::= FTFile(fsFile, bytes, hash, Some(oldFSObj))
+            keySet -= fsDir
+          }
+        }
       }
       { dir =>
+
         val path = getRelPath(dir)
-        keySet = keySet - path
+        val fsDir = FSDirectory(path)
 
-        val update = {
-          if (!hashes.contains(path))
-            true
-          else
-            hashes(path) match {
-              case None => false
-              case Some(fileData) => true   // formerly a file
-            }
-        }
+        hashes.lookupPath(path) match {
 
-        if (update) {
-          hashes.update(path, None)
-          updates = (path, None)::updates
+          case None => {
+            hashes(fsDir) = DirData(dir.lastModified)
+            updates ::= FTDirectory(fsDir, None)
+          }
+
+          case Some(fileData: FileData) => {
+
+            val fsFile = FSFile(path)
+            val oldFSObj = FLFile(fsFile, fileData.hash)
+
+            hashes.remove(fsFile)
+            hashes(fsDir) = DirData(dir.lastModified)
+            updates ::= FTDirectory(fsDir, Some(oldFSObj))
+            keySet -= fsFile
+          }
+
+          case Some(dirData) => {
+            keySet -= fsDir
+          }
         }
       }
 
-      // add our removed keys and their file hashes to a transfer map
-      val keyHashes = new HashMap[List[String], Option[Array[Byte]]]()
-      keySet.foreach { key =>
+      var removed = List[FLData]()
+      keySet.foreach { fsObj =>
 
-        val oldData = hashes.remove(key)
+        hashes.remove(fsObj) match {
+
+          case None => () // SHOULD never happen
+
+          case Some(dirData: DirData) =>
+            removed ::= FLDirectory(fsObj.asInstanceOf[FSDirectory])
+
+          case Some(fileData: FileData) =>
+            removed ::= FLFile(fsObj.asInstanceOf[FSFile], fileData.hash)
+        }
 
         // determine if we deleted a parent folder or just a file or empty folder
-        Utils.getDeleted(home, key) match {
-          case `key` => oldData match {
-            case None => () // not in hashmap
-            case Some(None) => keyHashes.update(key, None)  // directory
-            case Some(Some(fileData)) => keyHashes.update(key, Some(fileData.hash)) // file
-          }
-          case deleted => keyHashes.update(deleted, None) // parent folder
+        val path = fsObj.path
+        Utils.getDeleted(home, path) match {
+          case `path` => ()
+          case deletedPath =>
+            removed ::= FLDirectory(FSDirectory(fsObj.path))
         }
       }
 
       updates match {
         case Nil => ()  // no updates
         case _ => {
-          val msg = FileMessage(updates)
+          val msg = FSTransferMessage(updates)
           writeObject(msg)
         }
       }
 
-      if (!keyHashes.isEmpty) {
-        val msg = RemovedMessage(keyHashes)
-        writeObject(msg)
+      removed match {
+        case Nil => ()  // nothing removed
+        case _ => {
+          val msg = FSRemovedMessage(removed)
+          writeObject(msg)
+        }
       }
 
       Thread.sleep(500)

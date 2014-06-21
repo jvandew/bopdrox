@@ -26,14 +26,21 @@ case class FSListMessage (val fsList: List[FLData]) extends Message {
 }
 
 
-sealed trait FTData
+sealed trait FTData {
+  val fsObj: FSObject
+  val oldFSObj: Option[FLData]
+}
 case class FTDirectory (val dir: FSDirectory, val oldFSObj: Option[FLData])
-    extends FTData
+    extends FTData {
+  val fsObj = dir
+}
 case class FTFile (val file: FSFile,
                    val contents: FileBytes,
                    val hash: FileHash,
                    val oldFSObj: Option[FLData])
-    extends FTData
+    extends FTData {
+  val fsObj = file
+}
 
 /** Transfer file contents over the wire */
 case class FSTransferMessage (val ftList: List[FTData])

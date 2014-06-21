@@ -2,6 +2,7 @@ package bopdrox.client
 
 import bopdrox.util.{FileHash, FLData, FLDirectory, FLFile, FSDirectory, FSFile, FSObject, FSPath, Timestamp}
 import scala.collection.mutable.HashMap
+import scala.collection.Set
 
 /** A Client stores only timestamps and hashes, no chains. */
 sealed trait ClientData {
@@ -56,7 +57,10 @@ class ClientMap {
   }
 
 
-  def remove (fsObj: FSObject) : Unit = {
+  def keySet () : Set[FSObject] = dirMap.keySet ++ fileMap.keySet
+
+
+  def remove (fsObj: FSObject) : Option[ClientData] = {
     fsObj match {
       case fsDir: FSDirectory => dirMap.remove(fsDir)
       case fsFile: FSFile => fileMap.remove(fsFile)
