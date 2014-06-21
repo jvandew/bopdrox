@@ -88,7 +88,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 good ::= FTDirectory(dir, oldFSObj)
               }
 
-              case (Some(dData: DirData), Some(flDir: FLDirectory)) => ()
+              case (Some(DirData(_)), Some(FLDirectory(_))) => ()
                 // nothing to do here, transfer redundant
 
               case (Some(fData: FileData), Some(flFile: FLFile)) => {
@@ -119,7 +119,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 rejections ::= RejDirNone(dir)
               }
 
-              case (Some(dData: DirData), Some(flFile: FLFile)) => ()
+              case (Some(DirData(_)), Some(FLFile(_, _))) => ()
                 // nothing to do here, self-correcting error
 
               case (Some(fData: FileData), Some(flDir: FLDirectory)) => {
@@ -133,7 +133,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
                 rejections ::= RejDirFile(dir, fsOrigFile, fData.hash)
               }
 
-              case (Some(dData: DirData), None) => ()
+              case (Some(DirData(_)), None) => ()
                 // nothing to do here, self-correcting error
 
               case (Some(fData: FileData), None) => {

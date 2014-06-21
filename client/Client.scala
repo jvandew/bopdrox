@@ -210,11 +210,6 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
               keySet -= fsFile
             }
             else {
-
-              val (bytes, hash) = Utils.contentsAndHash(file)
-
-              hashes(fsFile) = FileData(file.lastModified, hash)
-              updates ::= FTFile(fsFile, bytes, hash, None)
               keySet -= fsFile
             }
           }
