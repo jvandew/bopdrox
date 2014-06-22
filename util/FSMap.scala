@@ -43,6 +43,36 @@ class FSMap[Data <: FSData, DirData <: Data with FSDirData, FileData <: Data wit
   def applyFile (file: FSFile) : FileData = fileMap(file)
 
 
+  def equals (other: FSMap[Data, DirData, FileData]) : Boolean = {
+
+    // if keys do not match we can simply return false
+    if (dirMap.keys != other.dirMap.keys || fileMap.keys != other.fileMap.keys) {
+      false
+    }
+    else {
+      // we only need to check files, keys are sufficient for directories
+      val matches = fileMap.map {
+        case (fsFile, fileData) =>
+          Utils.verifyHash(fileData.hash)(other.applyFile(fsFile).hash)
+      }
+
+      matches.fold(true)((m1, m2) => m1 && m2)
+    }
+  }
+
+
+  def foreach (fun: ((FSObject, Data)) => _) : Unit = {
+    dirMap.foreach(fun)
+    fileMap.foreach(fun)
+  }
+
+
+  def foreachDir (fun: ((FSDirectory, DirData)) => _) : Unit = dirMap.foreach(fun)
+
+
+  def foreachFile (fun: ((FSFile, FileData)) => _) : Unit = fileMap.foreach(fun)
+
+
   def lookupPath (path: FSPath) : Option[Data] = {
     dirMap.get(FSDirectory(path)) match {
       case None => {
