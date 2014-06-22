@@ -29,7 +29,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     val fsConflictDir = FSDirectory(conflictPath)
 
     Utils.ensureDir(home, conflictPath)
-    val conflictDir = Utils.newDir(home, conflictPath)
+    val conflictDir = Utils.newDir(home, fsConflictDir)
     server.hashes(fsConflictDir) = DirData(conflictDir.lastModified)
 
     fsConflictDir
@@ -42,7 +42,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     val fsConflictFile = FSFile(conflictPath)
 
     Utils.ensureDir(home, conflictPath)
-    val conflictedFile = Utils.newFile(home, conflictPath)
+    val conflictedFile = Utils.newFile(home, fsConflictFile)
 
     Utils.writeFile(conflictedFile)(contents)
     server.hashes(fsConflictFile) = FileData(conflictedFile.lastModified, hash, Nil)
@@ -82,7 +82,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (None, None) => {
 
-                val emptyDir = Utils.newDir(home, dir.path)
+                val emptyDir = Utils.newDir(home, dir)
                 server.hashes(dir) = DirData(emptyDir.lastModified)
 
                 good ::= FTDirectory(dir, oldFSObj)
@@ -94,7 +94,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
               case (Some(fData: FileData), Some(flFile: FLFile)) => {
 
                 if (Utils.verifyHash(fData.hash)(flFile.hash)) {
-                  val emptyDir = Utils.newDir(home, dir.path)
+                  val emptyDir = Utils.newDir(home, dir)
                   server.hashes(dir) = DirData(emptyDir.lastModified)
 
                   good ::= FTDirectory(dir, oldFSObj)
@@ -157,7 +157,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
               case (None, None) => {
 
                 Utils.ensureDir(home, fsFile.path)
-                val file = Utils.newFile(home, fsFile.path)
+                val file = Utils.newFile(home, fsFile)
 
                 Utils.writeFile(file)(contents)
                 server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
@@ -167,7 +167,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
               case (Some(dData: DirData), Some(flDir: FLDirectory)) => {
 
-                val file = Utils.newFile(home, fsFile.path)
+                val file = Utils.newFile(home, fsFile)
                 file.delete
 
                 Utils.writeFile(file)(contents)
@@ -179,7 +179,7 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
               case (Some(fData: FileData), Some(flFile: FLFile)) => {
 
                 if (Utils.verifyHash(fData.hash)(flFile.hash)) {
-                  val file = Utils.newFile(home, fsFile.path)
+                  val file = Utils.newFile(home, fsFile)
                   val chain = (fData.time, fData.hash)::fData.chain
 
                   Utils.writeFile(file)(contents)
@@ -278,14 +278,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
         _ match {
           case flDir: FLDirectory => server.hashes.synchronized {
             server.hashes.remove(flDir.dir)
-            val rem = Utils.newFile(home, flDir.dir.path)
+            val rem = Utils.newFile(home, FSFile(flDir.dir.path))
             Utils.dirDelete(rem)
           }
 
           // TODO(jacob) should check hashes here
           case flFile: FLFile => server.hashes.synchronized {
             server.hashes.remove(flFile.file)
-            val rem = Utils.newFile(home, flFile.file.path)
+            val rem = Utils.newFile(home, flFile.file)
             Utils.dirDelete(rem)
           }
         }

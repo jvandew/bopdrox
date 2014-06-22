@@ -1,38 +1,37 @@
-package bopdrox.client
+package bopdrox.util
 
-import bopdrox.util.{FileHash, FLData, FLDirectory, FLFile, FSDirectory, FSFile, FSObject, FSPath, Timestamp}
 import scala.collection.mutable.HashMap
 import scala.collection.Set
 
-/** A Client stores only timestamps and hashes, no chains. */
-sealed trait ClientData {
+/** Basic data to store in an FSMap */
+trait FSData {
   val time: Timestamp
 }
 
-case class FileData (val time: Timestamp,
-                     val hash: FileHash)
-    extends ClientData
+trait FSDirData extends FSData {
+  val time: Timestamp
+}
 
-case class DirData (val time: Timestamp) extends ClientData
+trait FSFileData extends FSData {
+  val time: Timestamp
+  val hash: FileHash
+}
 
 
-/** A ClientMap is essentially a pair of HashMaps, one for storing file information
+/** A FSMap is essentially a pair of HashMaps, one for storing file information
   * and one for storing directory information. This data structure serves to manage
   * this pair effectively. Note that we could use a regular HashMap, but the lack
   * of true dependent types in Scala makes creating a dependent HashMap that can
   * enforce the constraint of FSFile => FileData and FSDirectory => DirData a bit
   * awkward. AFAIK, this is the simplest solution.
-  *
-  * TODO(jacob): Create a single new bopdrox.util.FSMap which takes type parameters
-  *              and use this map instead for both Client and Server.
   */
-class ClientMap {
+class FSMap[Data <: FSData, DirData <: Data with FSDirData, FileData <: Data with FSFileData] {
 
   private val dirMap = new HashMap[FSDirectory, DirData]
   private val fileMap = new HashMap[FSFile, FileData]
 
 
-  def apply (fsObj: FSObject) : ClientData = fsObj match {
+  def apply (fsObj: FSObject) : Data = fsObj match {
     case file: FSFile => fileMap(file)
     case dir: FSDirectory => dirMap(dir)
   }
@@ -44,7 +43,7 @@ class ClientMap {
   def applyFile (file: FSFile) : FileData = fileMap(file)
 
 
-  def lookupPath (path: FSPath) : Option[ClientData] = {
+  def lookupPath (path: FSPath) : Option[Data] = {
     dirMap.get(FSDirectory(path)) match {
       case None => {
         fileMap.get(FSFile(path)) match {
@@ -60,7 +59,7 @@ class ClientMap {
   def keySet () : Set[FSObject] = dirMap.keySet ++ fileMap.keySet
 
 
-  def remove (fsObj: FSObject) : Option[ClientData] = {
+  def remove (fsObj: FSObject) : Option[Data] = {
     fsObj match {
       case fsDir: FSDirectory => dirMap.remove(fsDir)
       case fsFile: FSFile => fileMap.remove(fsFile)
@@ -73,20 +72,15 @@ class ClientMap {
     fileMap.toList.map(kv => FLFile(kv._1, kv._2.hash))
 
 
-  def update (fsObj: FSObject, data: ClientData) : Unit = {
-    (fsObj, data) match {
-      case (file: FSFile, fileData: FileData) => {
-        dirMap.remove(FSDirectory(file.path))
-        fileMap(file) = fileData
-      }
+  def update (file: FSFile, fileData: FileData) : Unit = {
+    dirMap.remove(FSDirectory(file.path))
+    fileMap(file) = fileData
+  }
 
-      case (dir: FSDirectory, dirData: DirData) => {
-        fileMap.remove(FSFile(dir.path))
-        dirMap(dir) = dirData
-      }
 
-      case _ => throw new IllegalArgumentException("Data type and FSObject type must match.")
-    }
+  def update (dir: FSDirectory, dirData: DirData) : Unit = {
+    fileMap.remove(FSFile(dir.path))
+    dirMap(dir) = dirData
   }
 
 }

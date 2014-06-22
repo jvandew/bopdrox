@@ -1,6 +1,6 @@
 package bopdrox.test
 
-import bopdrox.util.Utils
+import bopdrox.util.{FileHash, FSPath, Utils}
 import bopdrox.client.ClientData
 import bopdrox.server.ServerData
 import java.io.File
@@ -26,14 +26,13 @@ object TestUtils {
     sys.exit
   }
 
-  def createNewDir (home: File, subpath: List[String]) : Unit =
+  def createNewDir (home: File, subpath: FSPath) : Unit =
     Utils.newFile(home, subpath).mkdirs
 
-  def createNewFile (home: File, subpath: List[String]) : Unit =
+  def createNewFile (home: File, subpath: FSPath) : Unit =
     createNewFile(home, subpath, "")
 
-  // TODO(jacob) currying this method seems to cause problems with "ambiguity" figure out why
-  def createNewFile (home: File, subpath: List[String], text: String) : Unit = {
+  def createNewFile (home: File, subpath: FSPath, text: String) : Unit = {
     val file = Utils.newFile(home, subpath)
     file.createNewFile
     writeFileString(file)(text)
@@ -62,7 +61,7 @@ object TestUtils {
   }
 
   // convert a hash in byte array format to a printable hex string
-  def hexHash (hash: Array[Byte]) : String = {
+  def hexHash (hash: FileHash) : String = {
     val hexArr = hash.map { b =>
       val hex = b.toInt.toHexString
       ("00" + hex).substring(hex.length)
@@ -71,7 +70,7 @@ object TestUtils {
   }
 
   // TODO(jacob) create an overarching MapData type so duplicating this function is unnecessary
-  def printClientMap (map: HashMap[List[String], Option[ClientData]]) : Unit = {
+  def printClientMap (map: HashMap[FSPath, Option[ClientData]]) : Unit = {
     println("Begin Client map:")
     map.keys.foreach { key =>
       map(key) match {
@@ -84,7 +83,7 @@ object TestUtils {
   }
 
   // TODO(jacob) create an overarching MapData type so duplicating this function is unnecessary
-  def printServerMap (map: HashMap[List[String], Option[ServerData]]) : Unit = {
+  def printServerMap (map: HashMap[FSPath, Option[ServerData]]) : Unit = {
     println("Begin Server map:")
     map.keys.foreach { key =>
       map(key) match {
@@ -96,7 +95,7 @@ object TestUtils {
     print("\n")
   }
 
-  def readFileString (home: File, subpath: List[String]) : String =
+  def readFileString (home: File, subpath: FSPath) : String =
     readFileString(home, Utils.joinPath(subpath))
 
   def readFileString (home: File, subpath: String) : String =
