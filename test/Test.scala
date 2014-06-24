@@ -95,6 +95,7 @@ object Test {
   // shortcut to create a new file and add it for tracking
   def createAndTrack (home: File, fsFile: FSFile) : Unit = {
     val file = Utils.newFile(home, fsFile)
+    file.createNewFile
     refMap(fsFile) = FileData(file.lastModified, Utils.hashFile(file))
   }
 
@@ -102,6 +103,7 @@ object Test {
   // shortcut to create a new directory and add it for tracking
   def createDirAndTrack (home: File, fsDir: FSDirectory) : Unit = {
     val dir = Utils.newDir(home, fsDir)
+    dir.mkdir
     refMap(fsDir) = DirData(dir.lastModified)
   }
 

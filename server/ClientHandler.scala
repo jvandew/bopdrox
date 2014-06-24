@@ -260,12 +260,14 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
               c.message(msg)
           }
         }
-        case _ => server.synchronized {
+        case _ => {
           message(RejectUpdateMessage(rejections))
           message(FSTransferMessage(originals ++ conflictCopies))
-          server.clients.foreach { c =>
-            if (!c.equals(this))
-              c.message(FSTransferMessage(good ++ conflictCopies))
+          server.synchronized {
+            server.clients.foreach { c =>
+              if (!c.equals(this))
+                c.message(FSTransferMessage(good ++ conflictCopies))
+            }
           }
         }
       }

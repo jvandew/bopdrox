@@ -34,7 +34,11 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
 
 
   // disconnect handler
-  private[client] def disconnect (ioe: IOException) : Unit = sys.exit
+  private[client] def disconnect (ioe: IOException) : Unit = {
+    println("IOException received! Initiating hara-kiri...")
+    ioe.printStackTrace
+    sys.exit
+  }
 
 
   def isOpen : Boolean = open

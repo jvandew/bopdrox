@@ -1,7 +1,7 @@
 package bopdrox.util
 
 /** Algeraic datatype for Messages **/
-sealed trait Message
+sealed trait Message extends Serializable
 
 
 /** A message to be sent to acknowledge a received message when no other reply
@@ -55,22 +55,34 @@ case class FSRequest (val files: List[FSObject]) extends Message {
 }
 
 
-sealed abstract class Rejection (val fsObj: FSObject)
+sealed trait Rejection {
+  val fsObj: FSObject
+}
 case class RejDirFile (val dir: FSDirectory,
                        val serverFile: FSFile,
                        val serverHash: FileHash)
-    extends Rejection(dir)
+    extends Rejection {
+  val fsObj = dir
+}
 case class RejFileDir (val file: FSFile, val hash: FileHash, val dir: FSDirectory)
-    extends Rejection(file)
+    extends Rejection {
+  val fsObj = file
+}
 case class RejFileFile (val file: FSFile,
                         val hash: FileHash,
                         val serverHash: FileHash)
-    extends Rejection(file)
+    extends Rejection {
+  val fsObj = file
+}
 case class RejDirNone (val dir: FSDirectory)
-    extends Rejection(dir)
+    extends Rejection {
+  val fsObj = dir
+}
 case class RejFileNone (val file: FSFile,
                         val hash: FileHash)
-    extends Rejection(file)
+    extends Rejection {
+  val fsObj = file
+}
 
 /** Notify a Client of rejected file updates */
 case class RejectUpdateMessage (val rejections: List[Rejection])

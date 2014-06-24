@@ -21,7 +21,9 @@ object Utils {
    * succeeds while handling failure */
   def checkedRead (handler: IOException => Unit) (in: ObjectInputStream) : Option[Object] = {
     try {
-      Some(in.readObject)
+      in.synchronized {
+        Some(in.readObject)
+      }
     } catch {
       case ioe: IOException => {
         handler(ioe)
@@ -34,8 +36,10 @@ object Utils {
    * succeeds while handling failure */
   def checkedWrite (handler: IOException => Unit) (out: ObjectOutputStream) (msg: Message) : Unit = {
     try {
-      out.writeObject(msg)
-      out.reset
+      out.synchronized {
+        out.writeObject(msg)
+        out.reset
+      }
     } catch {
       case ioe: IOException => handler(ioe)
     }

@@ -66,7 +66,7 @@ class Server (val home: File) (port: Int) extends Runnable {
       val handler = new ClientHandler(this)(client)
 
       this.synchronized {
-        clients = handler::clients
+        clients ::= handler
       }
 
       new Thread(handler).start
