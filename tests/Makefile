@@ -1,5 +1,3 @@
-scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
-
 .PHONY: clean tests
 
 tests: TestUtils.scala Test.scala

@@ -1,5 +1,3 @@
-scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
-
 .PHONY: clean util
 
 util: FSMap.scala FSObject.scala Message.scala package.scala Utils.scala

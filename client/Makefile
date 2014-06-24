@@ -1,9 +1,8 @@
-scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
-
 .PHONY: clean client
 
-client: Client.scala ClientListener.scala package.scala
+client: Client.scala ClientData.scala ClientListener.scala package.scala
 	$(scalac)  \
+		ClientData.scala      \
 		package.scala         \
 		ClientListener.scala  \
 		Client.scala

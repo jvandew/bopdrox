@@ -1,7 +1,7 @@
 package bopdrox.tests
 
-import bopdrox.util.{FileHash, FSData, FSDirData, FSDirectory, FSFile, FSFileData, FSMap,
-                     FSObject, FSPath, Utils}
+import bopdrox.util.{FileHash, FSData, FSDirData, FSDirectory, FSFile, FSFileData,
+                     FSMap, FSObject, FSPath, Utils}
 import java.io.File
 import java.util.Scanner
 import scala.collection.mutable.HashMap
@@ -11,7 +11,7 @@ import scala.collection.mutable.HashMap
 object TestUtils {
 
   // insert a "breakpoint" in the code
-  def breakpoint : Unit = {
+  def breakpoint () : Unit = {
     val scanner = new Scanner(System.in)
     println("Breakpoint reached. Press enter to continue.")
     scanner.nextLine
