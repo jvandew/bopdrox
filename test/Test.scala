@@ -1,8 +1,8 @@
 package bopdrox.test
 
-import bopdrox.client.Client
+import bopdrox.client.{Client, ClientMap, DirData, FileData}
 import bopdrox.server.Server
-import bopdrox.util.Utils
+import bopdrox.util.{FSDirectory, FSFile, FSObject, Utils}
 import java.io.{File, FileOutputStream}
 import java.util.Date
 import scala.collection.mutable.HashMap
@@ -32,50 +32,54 @@ object Test {
    */
 
   val emptyDirs = List(
-      List("empty_dir"),
-      List("nested", "nested", "nested", "empty_dir"))
+      FSDirectory(List("empty_dir")),
+      FSDirectory(List("nested", "nested", "nested", "empty_dir")))
 
   val emptyFiles = List(
-      List("empty.test"),
-      List("nested", "empty.test"),
-      List("nested", "nested", "nested", "empty"))
+      FSFile(List("empty.test")),
+      FSFile(List("nested", "empty.test")),
+      FSFile(List("nested", "nested", "nested", "empty")))
 
   val nonEmptyFiles = List(
-      List("test"),
-      List("test2"),
-      List("nested", "testFile"),
-      List("nested", "nested", "nested", "test"))
+      FSFile(List("test")),
+      FSFile(List("test2")),
+      FSFile(List("nested", "testFile")),
+      FSFile(List("nested", "nested", "nested", "test")))
 
   val parentDirs = List(
-      List("nested"),
-      List("nested", "nested"),
-      List("nested", "nested", "nested"))
+      FSDirectory(List("nested")),
+      FSDirectory(List("nested", "nested")),
+      FSDirectory(List("nested", "nested", "nested")))
 
-  var allFileSubpaths = List(emptyDirs, emptyFiles, nonEmptyFiles, parentDirs).flatten
+  // TODO(jacob) for now we use a ClientMap and don't worry about the chain
+  val refMap = new ClientMap
 
-  // TODO(jacob) figure out how to define an implicit ordering on List[String]
-  def allFiles : List[String] = allFileSubpaths.map(Utils.joinPath(_)).sorted
 
   private def buildEmptyDirs (serverDir: File) : Unit =
     emptyDirs.foreach(createDirAndTrack(serverDir, _))
 
+
   private def buildEmptyFiles (serverDir: File) : Unit =
     emptyFiles.foreach(createAndTrack(serverDir, _))
 
+
   private def buildNonEmptyFiles (serverDir: File) : Unit = {
-    createWriteAndTrack(serverDir, List("test"))(List("this is a test\n\n"))
-    createWriteAndTrack(serverDir, List("test2"))(List("this is a test\n\n"))
-    createWriteAndTrack(serverDir, List("nested", "testFile"))(List("\nI'm\n\talso\n a \n test!\n\n"))
+    createWriteAndTrack(serverDir, nonEmptyFiles(0))(List("this is a test\n\n"))
+    createWriteAndTrack(serverDir, nonEmptyFiles(1))(List("this is a test\n\n"))
+    createWriteAndTrack(serverDir, nonEmptyFiles(2))(List("\nI'm\n\talso\n a \n test!\n\n"))
+
 
     val longText = new String(Array.tabulate(1000000)(n => 'a'))
-    TestUtils.createNewFile(serverDir, List("nested", "nested", "nested", "test"), longText)
+    TestUtils.createNewFile(serverDir, nonEmptyFiles(3), longText)
   }
+
 
   private def buildServerDir (timeStr: String) : File = {
     val serverDir = new File("server_test_dir_" + timeStr)
     serverDir.mkdir
     serverDir
   }
+
 
   def buildTestDir (timeStr: String) : File = {
     val serverDir = buildServerDir(timeStr)
@@ -87,120 +91,105 @@ object Test {
     serverDir
   }
 
-  def checkAndVerifyHashMaps (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
-    print("Verifying Client-Server hashmap consistency... ")
-
-    checkReference(serverDir, clientDirs)(server)(clients)
-    verifyHashMaps(serverDir, clientDirs)(server)(clients)
-
-    println("done")
-  }
-
-  def checkReference (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
-    assert(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted equals allFiles, {
-      println("ERROR!\nServer hashmap does not match reference")
-      println(server.hashes.keys.toList.map(Utils.joinPath(_)).sorted)
-      println(allFiles)
-      TestUtils.cleanUp(serverDir)(clientDirs)
-    })
-  }
 
   // shortcut to create a new file and add it for tracking
-  def createAndTrack (home: File, subpath: List[String]) : Unit = {
-    TestUtils.createNewFile(home, subpath)
-    track(subpath)
+  def createAndTrack (home: File, fsFile: FSFile) : Unit = {
+    val file = Utils.newFile(home, fsFile)
+    refMap(fsFile) = FileData(file.lastModified, Utils.hashFile(file))
   }
+
 
   // shortcut to create a new directory and add it for tracking
-  def createDirAndTrack (home: File, subpath: List[String]) : Unit = {
-    TestUtils.createNewDir(home, subpath)
-    track(subpath)
+  def createDirAndTrack (home: File, fsDir: FSDirectory) : Unit = {
+    val dir = Utils.newDir(home, fsDir)
+    refMap(fsDir) = DirData(dir.lastModified)
   }
+
 
   // shortcut to create a new file and erase and write strings to it multiple times
-  def createWriteAndTrack (home: File, subpath: List[String]) (strings: List[String]) : Unit = {
-    def recurse (file: File, strs: List[String]) : Unit = strs match {
-      case Nil => track(subpath)
-      case s::ss => {
-        TestUtils.writeFileString(file)(s)
-        recurse(file, ss)
-      }
-    }
-
-    val file = Utils.newFile(home, subpath)
+  def createWriteAndTrack (home: File, fsFile: FSFile) (strings: List[String]) : Unit = {
+    val file = Utils.newFile(home, fsFile)
     file.createNewFile
-    recurse(file, strings)
+    strings.foreach(TestUtils.writeFileString(file))
   }
 
-  // shortcut to delete and untrack a file/folder
-  def deleteAndUntrack (home: File, subpath: List[String]) : Unit = {
-    Utils.dirDelete(Utils.newFile(home, subpath))
-    untrack(subpath)
+
+  // shortcut to delete and untrack a directory
+  def deleteAndUntrack (home: File, fsDir: FSDirectory) : Unit = {
+    Utils.dirDelete(Utils.newDir(home, fsDir))
+    refMap.remove(fsDir)
   }
+
+
+  // shortcut to delete and untrack a file
+  def deleteAndUntrack (home: File, fsFile: FSFile) : Unit = {
+    Utils.dirDelete(Utils.newFile(home, fsFile))
+    refMap.remove(fsFile)
+  }
+
 
   // erase a file and then append multiple strings to it; assumes file exists
-  def fileMultiwrite (home: File, subpath: List[String]) (strings: List[String]) : Unit = {
-    def recurse (out: FileOutputStream, strs: List[String]) : Unit = strs match {
-      case Nil => ()  // file already exists; do not track again
-      case s::ss => {
-        out.write(s.getBytes)
-        recurse(out, ss)
-      }
-    }
-
-    recurse(new FileOutputStream(Utils.newFile(home, subpath)), strings)
+  def fileMultiwrite (home: File, fsFile: FSFile) (strings: List[String]) : Unit = {
+    val out = new FileOutputStream(Utils.newFile(home, fsFile))
+    strings.foreach(s => out.write(s.getBytes))
+    out.close
   }
 
-  def printAndVerifyFiles (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
-    println()
-    TestUtils.printServerMap(server.hashes)
-    server.hashes.keys.toList.foreach { subpath =>
-      if (Utils.newFile(server.home, subpath).isFile)
-        verifyFiles(serverDir, clientDirs)(subpath)
+
+  def verifyFile (serverDir: File, clientDirs: List[File]) (fsFile: FSFile) : Boolean = {
+
+    print("Verifying the contents of " + Utils.joinPath(fsFile.path) + "... ")
+    val serverHash = Utils.hashFile(Utils.newFile(serverDir, fsFile))
+    val clientHashes = clientDirs.map(home => Utils.hashFile(Utils.newFile(home, fsFile)))
+
+    if (!clientHashes.forall(Utils.verifyHash(serverHash))) {
+      println("FAILED!:\n" + TestUtils.hexHash(serverHash))
+      clientHashes.foreach(hash => println(TestUtils.hexHash(hash)))
+
+      println("done")
+      false
     }
-
-    println()
-    clients.foreach(c => TestUtils.printClientMap(c.hashes))
-
-    println("Test-maintained file list (not necessarily correct):")
-    println(allFiles)
-    println()
+    else {
+      println("done")
+      true
+    }
   }
 
-  // update the list of tracked files/folders to include a new subpath
-  def track (subpath: List[String]) : Unit =
-    allFileSubpaths = allFileSubpaths ++ (Utils.pathParents(subpath).diff(allFileSubpaths))
 
-  // remove a subpath from the list of tracked files/folders
-  def untrack (subpath: List[String]) : Unit =
-    allFileSubpaths = allFileSubpaths.filter(!Utils.listStartsWith(_)(subpath))
+  def verifyFiles (serverDir: File, clientDirs: List[File]) (server: Server) : Unit = {
 
-  def verifyFiles (serverDir: File, clientDirs: List[File]) (subpath: List[String]) : Unit = {
-    print("Verifying the contents of " + Utils.joinPath(subpath) + "... ")
-    val serverString = TestUtils.readFileString(serverDir, subpath)
-    val clientStrings = clientDirs.map(TestUtils.readFileString(_, subpath))
+    assert(server.hashes.keySetFile.forall(verifyFile(serverDir, clientDirs)), {
 
-    if (!clientStrings.forall(serverString == _)) {
-      println("FAILED!:\n" + serverString)
-      clientStrings.foreach(println(_))
-    }
-
-    println("done")
-  }
-
-  def verifyHashMaps (serverDir: File, clientDirs: List[File]) (server: Server) (clients: List[Client]) : Unit = {
-    assert(clients.map(c => TestUtils.hashmapEquals(server.hashes)(c.hashes)).reduce((c1, c2) => c1 && c2), {
-      println("ERROR!\nClient-Server mismatch")
-      TestUtils.printServerMap(server.hashes)
-      server.hashes.keys.toList.foreach { subpath =>
-        if (Utils.newFile(server.home, subpath).isFile)
-          verifyFiles(serverDir, clientDirs)(subpath)
-      }
-      clients.foreach(c => TestUtils.printClientMap(c.hashes))
-      println(allFiles)
-      TestUtils.cleanUp(serverDir)(clientDirs)
+      println("ERROR!\nFile consistency check(s) failed. See printouts")
+      TestUtils.cleanUp(serverDir, clientDirs)
     })
   }
+
+
+  def verifyMaps (serverDir: File, clientDirs: List[File])
+                 (server: Server, clients: List[Client])
+      : Unit = {
+
+    assert(clients.forall(server.hashes == _.hashes), {
+
+      println("ERROR!\nClient-Server mismatch")
+      TestUtils.printMap("Server Map:")(server.hashes)
+      server.hashes.keySetFile.foreach(verifyFile(serverDir, clientDirs))
+      clients.foreach(c => TestUtils.printMap("Client Map:")(c.hashes))
+
+      TestUtils.cleanUp(serverDir, clientDirs)
+    })
+  }
+
+
+  def verifySync (serverDir: File, clientDirs: List[File])
+                 (server: Server, clients: List[Client])
+      : Unit = {
+
+    verifyMaps(serverDir, clientDirs)(server, clients)
+    verifyFiles(serverDir, clientDirs)(server)
+  }
+
 
   // currently runs with no arguments
   // TODO(jacob) test replacing file with folder and vice versa
@@ -375,7 +364,7 @@ object Test {
     println("done")
 
     println("All tests pass (for what that's worth). Cleaning up...")
-    TestUtils.cleanUp(serverDir)(clientDirs)
+    TestUtils.cleanUp(serverDir, clientDirs)
   }
 
 }

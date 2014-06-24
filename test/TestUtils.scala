@@ -1,6 +1,6 @@
 package bopdrox.test
 
-import bopdrox.util.{FileHash, FSData, FSDirData, FSFile, FSFileData, FSMap,
+import bopdrox.util.{FileHash, FSData, FSDirData, FSDirectory, FSFile, FSFileData, FSMap,
                      FSObject, FSPath, Utils}
 import java.io.File
 import java.util.Scanner
@@ -19,7 +19,7 @@ object TestUtils {
 
 
   // TODO(jacob) clean up is still very messy...
-  def cleanUp (serverDir: File) (clientDirs: List[File]) : Unit = {
+  def cleanUp (serverDir: File, clientDirs: List[File]) : Unit = {
     clientDirs.foreach(Utils.dirDelete(_))
     Utils.dirDelete(serverDir)
 
@@ -44,17 +44,18 @@ object TestUtils {
   }
 
 
-  def printMap (desc: String) (map: FSMap[FSData, FSDirData, FSFileData]) : Unit = {
+  def printMap[Data <: FSData, DirData <: Data with FSDirData, FileData <: Data with FSFileData] (desc: String) (map: FSMap[Data, DirData, FileData]) : Unit = {
 
     println(desc)
 
-    map.foreach { kv: (FSObject, FSData) =>
-      kv match {
-        case (fsObj, dirData: FSDirData) =>
-          println(Utils.joinPath(fsObj.path) + " : Directory")
-        case (fsObj, fileData: FSFileData) =>
-          println(Utils.joinPath(fsObj.path) + " : " + hexHash(fileData.hash).substring(0, 16))
-      }
+    map.foreach { kv: (FSDirectory, DirData) =>
+      val path = Utils.joinPath(kv._1.path)
+      println(path + " : Directory")
+    }
+    { kv: (FSFile, FileData) =>
+      val path = Utils.joinPath(kv._1.path)
+      val hash = hexHash(kv._2.hash).substring(0, 16)
+      println(path + " : " + hash)
     }
 
     print("\n")
