@@ -32,24 +32,24 @@ object Test {
    */
 
   val emptyDirs = List(
-      FSDirectory(List("empty_dir")),
-      FSDirectory(List("nested", "nested", "nested", "empty_dir")))
+    FSDirectory(List("empty_dir")),
+    FSDirectory(List("nested", "nested", "nested", "empty_dir")))
 
   val emptyFiles = List(
-      FSFile(List("empty.test")),
-      FSFile(List("nested", "empty.test")),
-      FSFile(List("nested", "nested", "nested", "empty")))
+    FSFile(List("empty.test")),
+    FSFile(List("nested", "empty.test")),
+    FSFile(List("nested", "nested", "nested", "empty")))
 
   val nonEmptyFiles = List(
-      FSFile(List("test")),
-      FSFile(List("test2")),
-      FSFile(List("nested", "testFile")),
-      FSFile(List("nested", "nested", "nested", "test")))
+    FSFile(List("test")),
+    FSFile(List("test2")),
+    FSFile(List("nested", "testFile")),
+    FSFile(List("nested", "nested", "nested", "test")))
 
   val parentDirs = List(
-      FSDirectory(List("nested")),
-      FSDirectory(List("nested", "nested")),
-      FSDirectory(List("nested", "nested", "nested")))
+    FSDirectory(List("nested")),
+    FSDirectory(List("nested", "nested")),
+    FSDirectory(List("nested", "nested", "nested")))
 
   // TODO(jacob) for now we use a ClientMap and don't worry about the chain
   val refMap = new ClientMap
@@ -214,17 +214,15 @@ object Test {
     val clients = clientDirs.map(new Client(_)("localhost")(9000))
     val clientThreads = clients.map(new Thread(_))
 
-    val checkFiles = verifyFiles(serverDir, clientDirs) _
-    val checkMaps = checkAndVerifyHashMaps(serverDir, clientDirs) _
+    val checkSync = verifySync(serverDir, clientDirs) _
 
     while (!server.isOpen) Thread.sleep(100)
 
     clientThreads.foreach(_.start)
-
-    while (!clients.map(_.isOpen).reduce((c1, c2) => c1 && c2)) Thread.sleep(100)
+    while (!clients.forall(_.isOpen)) Thread.sleep(100)
 
     // verify hashmaps have been built correctly
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     /*  Folder hierarchy:
      *
@@ -243,125 +241,120 @@ object Test {
      *    - test2
      */
 
+    val testFiles = List(
+      FSFile(List("new_file1")),
+      FSFile(List("new_file2")),
+      FSFile(List("new_file3")),
+      FSFile(List("empty_dir", "test")),
+      FSFile(List("nested", "nested", "nested", "test2")),
+      FSFile(List("nested", "nested", "nested", "empty_dir", "test.test")),
+      FSFile(List("nested", "nested", "new_file")))
+
+    val testStrings = List(
+      List("", "", ""),
+      List("two\n", "things\n"),
+      List("two\n", "things\n"),
+      List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"),
+      List("\n\t\n\t\n", "stuff", " hi"),
+      List("hi", " ", "there"),
+      List("hit", " ", "here"))
+
     println("Testing single client file creation...")
-
-    createAndTrack(clientDirs(0), List("new_file1"))
-    createAndTrack(clientDirs(0), List("new_file2"))
-    createAndTrack(clientDirs(0), List("new_file3"))
-    createAndTrack(clientDirs(0), List("empty_dir", "test"))
-    createAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))
-    createAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    createAndTrack(clientDirs(0), List("nested", "nested", "new_file"))
-
+    testFiles.foreach(fsFile => createAndTrack(clientDirs(0), fsFile))
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+
+    checkSync(server, clients)
 
     println("Testing single client file deletion...")
-
-    deleteAndUntrack(clientDirs(1), List("new_file1"))
-    deleteAndUntrack(clientDirs(1), List("new_file2"))
-    deleteAndUntrack(clientDirs(1), List("new_file3"))
-    deleteAndUntrack(clientDirs(1), List("empty_dir", "test"))
-    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "test2"))
-    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    deleteAndUntrack(clientDirs(1), List("nested", "nested", "new_file"))
-
+    testFiles.foreach(fsFile => deleteAndUntrack(clientDirs(1), fsFile))
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+
+    checkSync(server, clients)
 
     println("Testing multiple client file creation...")
 
-    createAndTrack(clientDirs(0), List("new_file1"))
-    createAndTrack(clientDirs(1), List("new_file2"))
-    createAndTrack(clientDirs(2), List("new_file3"))
-    createAndTrack(clientDirs(2), List("empty_dir", "test"))
-    createAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))
-    createAndTrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    createAndTrack(clientDirs(1), List("nested", "nested", "new_file"))
+    createAndTrack(clientDirs(0), testFiles(0))
+    createAndTrack(clientDirs(1), testFiles(1))
+    createAndTrack(clientDirs(2), testFiles(2))
+    createAndTrack(clientDirs(2), testFiles(3))
+    createAndTrack(clientDirs(0), testFiles(4))
+    createAndTrack(clientDirs(1), testFiles(5))
+    createAndTrack(clientDirs(1), testFiles(6))
 
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     println("Testing multiple client file deletion...")
 
-    deleteAndUntrack(clientDirs(1), List("new_file1"))
-    deleteAndUntrack(clientDirs(2), List("new_file2"))
-    deleteAndUntrack(clientDirs(0), List("new_file3"))
-    deleteAndUntrack(clientDirs(1), List("empty_dir", "test"))
-    deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "test2"))
-    deleteAndUntrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
+    deleteAndUntrack(clientDirs(1), testFiles(0))
+    deleteAndUntrack(clientDirs(2), testFiles(1))
+    deleteAndUntrack(clientDirs(0), testFiles(2))
+    deleteAndUntrack(clientDirs(1), testFiles(3))
+    deleteAndUntrack(clientDirs(2), testFiles(4))
+    deleteAndUntrack(clientDirs(0), testFiles(5))
+    deleteAndUntrack(clientDirs(0), testFiles(6))
 
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     println("Testing single client file creation and rewriting...")
 
-    createWriteAndTrack(clientDirs(0), List("new_file1"))(List("", "", ""))
-    createWriteAndTrack(clientDirs(0), List("new_file2"))(List("two\n", "things\n"))
-    createWriteAndTrack(clientDirs(0), List("new_file3"))(List("two\n", "things\n"))
-    createWriteAndTrack(clientDirs(0), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
-    createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
-    createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
-    createWriteAndTrack(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+    for (i <- 0 until testFiles.length) {
+      createWriteAndTrack(clientDirs(0), testFiles(i))(testStrings(i))
+    }
 
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     println("Testing single client file appending...")
 
-    fileMultiwrite(clientDirs(0), List("new_file1"))(List("", "", ""))
-    fileMultiwrite(clientDirs(0), List("new_file2"))(List("two\n", "things\n"))
-    fileMultiwrite(clientDirs(0), List("new_file3"))(List("two\n", "things\n"))
-    fileMultiwrite(clientDirs(0), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
-    fileMultiwrite(clientDirs(0), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
-    fileMultiwrite(clientDirs(0), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
-    fileMultiwrite(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+    for (i <- 0 until testFiles.length) {
+      fileMultiwrite(clientDirs(0), testFiles(i))(testStrings(i))
+    }
 
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     println("Testing multiple client file deletion...")
 
-    deleteAndUntrack(clientDirs(0), List("new_file1"))
-    deleteAndUntrack(clientDirs(1), List("new_file2"))
-    deleteAndUntrack(clientDirs(2), List("new_file3"))
-    deleteAndUntrack(clientDirs(0), List("empty_dir", "test"))
-    deleteAndUntrack(clientDirs(1), List("nested", "nested", "nested", "test2"))
-    deleteAndUntrack(clientDirs(2), List("nested", "nested", "nested", "empty_dir", "test.test"))
-    deleteAndUntrack(clientDirs(0), List("nested", "nested", "new_file"))
+    deleteAndUntrack(clientDirs(0), testFiles(0))
+    deleteAndUntrack(clientDirs(1), testFiles(1))
+    deleteAndUntrack(clientDirs(2), testFiles(2))
+    deleteAndUntrack(clientDirs(0), testFiles(3))
+    deleteAndUntrack(clientDirs(1), testFiles(4))
+    deleteAndUntrack(clientDirs(2), testFiles(5))
+    deleteAndUntrack(clientDirs(0), testFiles(6))
 
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     println("Testing multiple client file creation and rewriting...")
 
-    createWriteAndTrack(clientDirs(2), List("new_file1"))(List("", "", ""))
-    createWriteAndTrack(clientDirs(1), List("new_file2"))(List("two\n", "things\n"))
-    createWriteAndTrack(clientDirs(0), List("new_file3"))(List("two\n", "things\n"))
-    createWriteAndTrack(clientDirs(1), List("empty_dir", "test"))(List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
-    createWriteAndTrack(clientDirs(0), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
-    createWriteAndTrack(clientDirs(1), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
-    createWriteAndTrack(clientDirs(2), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+    createWriteAndTrack(clientDirs(2), testFiles(0))(testStrings(0))
+    createWriteAndTrack(clientDirs(1), testFiles(1))(testStrings(1))
+    createWriteAndTrack(clientDirs(0), testFiles(2))(testStrings(2))
+    createWriteAndTrack(clientDirs(1), testFiles(3))(testStrings(3))
+    createWriteAndTrack(clientDirs(0), testFiles(4))(testStrings(4))
+    createWriteAndTrack(clientDirs(1), testFiles(5))(testStrings(5))
+    createWriteAndTrack(clientDirs(2), testFiles(6))(testStrings(6))
 
     Thread.sleep(sleep)
-    checkMaps(server)(clients)
+    checkSync(server, clients)
 
     println("Testing multiple client file appending...")
 
-    fileMultiwrite(clientDirs(0), List("new_file1"))(List("", "", ""))
-    fileMultiwrite(clientDirs(2), List("new_file2"))(List("two\n", "things\n"))
-    fileMultiwrite(clientDirs(1), List("new_file3"))(List("ttwo\n", "things\n"))
-    fileMultiwrite(clientDirs(0), List("new_file3"))(List("moar\n", "stuff\n"))
-    fileMultiwrite(clientDirs(2), List("empty_dir", "test"))(List("tl", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
-    fileMultiwrite(clientDirs(0), List("empty_dir", "test"))(List("z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z"))
-    fileMultiwrite(clientDirs(1), List("nested", "nested", "nested", "test2"))(List("\n\t\n\t\n", "stuff", " hi"))
-    fileMultiwrite(clientDirs(2), List("nested", "nested", "nested", "empty_dir", "test.test"))(List("hi", " ", "there"))
-    fileMultiwrite(clientDirs(0), List("nested", "nested", "new_file"))(List("hit", " ", "here"))
+    fileMultiwrite(clientDirs(0), testFiles(0))(testStrings(0))
+    fileMultiwrite(clientDirs(2), testFiles(1))(testStrings(1))
+    fileMultiwrite(clientDirs(1), testFiles(2))(List("ttwo\n", "things\n"))
+    fileMultiwrite(clientDirs(0), testFiles(2))(List("moar\n", "stuff\n"))
+    fileMultiwrite(clientDirs(2), testFiles(3))(List("tl", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"))
+    fileMultiwrite(clientDirs(0), testFiles(3))(List("z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z", "z"))
+    fileMultiwrite(clientDirs(1), testFiles(4))(testStrings(4))
+    fileMultiwrite(clientDirs(2), testFiles(5))(testStrings(5))
+    fileMultiwrite(clientDirs(0), testFiles(6))(testStrings(6))
 
     Thread.sleep(sleep)
-    verifyHashMaps(serverDir, clientDirs)(server)(clients)
-    println("done")
+    checkSync(server, clients)
 
     println("All tests pass (for what that's worth). Cleaning up...")
     TestUtils.cleanUp(serverDir, clientDirs)
