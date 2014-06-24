@@ -1,8 +1,8 @@
 scalac = fsc -deprecation -optimise -classpath ../.. -d ../..
 
-.PHONY: clean test
+.PHONY: clean tests
 
-test: TestUtils.scala Test.scala
+tests: TestUtils.scala Test.scala
 	$(scalac)  \
 		TestUtils.scala  \
 		Test.scala

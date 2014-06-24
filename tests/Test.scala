@@ -1,4 +1,4 @@
-package bopdrox.test
+package bopdrox.tests
 
 import bopdrox.client.{Client, ClientMap, DirData, FileData}
 import bopdrox.server.Server

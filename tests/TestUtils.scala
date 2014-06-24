@@ -1,4 +1,4 @@
-package bopdrox.test
+package bopdrox.tests
 
 import bopdrox.util.{FileHash, FSData, FSDirData, FSDirectory, FSFile, FSFileData, FSMap,
                      FSObject, FSPath, Utils}
