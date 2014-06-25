@@ -17,14 +17,12 @@ sealed trait FLData extends Serializable {
 
 @SerialVersionUID(10L)
 case class FLDirectory (val dir: FSDirectory) extends FLData {
-  override val fsObj = dir
-  private val serialVersionUID = 10L
+  val fsObj = dir
 }
 
 @SerialVersionUID(11L)
 case class FLFile (val file: FSFile, val hash: FileHash) extends FLData {
-  override val fsObj = file
-  private val serialVersionUID = 11L
+  val fsObj = file
 }
 
 /** Send a list of FSObjects with file hashes over the wire */
@@ -38,20 +36,18 @@ sealed trait FTData extends Serializable {
 }
 
 @SerialVersionUID(20L)
-case class FTDirectory (val dir: FSDirectory, override val oldFSObj: Option[FLData])
+case class FTDirectory (val dir: FSDirectory, val oldFSObj: Option[FLData])
     extends FTData {
-  override val fsObj = dir
-  private val serialVersionUID = 20L
+  val fsObj = dir
 }
 
 @SerialVersionUID(21L)
 case class FTFile (val file: FSFile,
                    val contents: FileBytes,
                    val hash: FileHash,
-                   override val oldFSObj: Option[FLData])
+                   val oldFSObj: Option[FLData])
     extends FTData {
-  override val fsObj = file
-  private val serialVersionUID = 21L
+  val fsObj = file
 }
 
 /** Transfer file contents over the wire */
@@ -73,15 +69,13 @@ case class RejDirFile (val dir: FSDirectory,
                        val serverFile: FSFile,
                        val serverHash: FileHash)
     extends Rejection {
-  override val fsObj = dir
-  private val serialVersionUID = 30L
+  val fsObj = dir
 }
 
 @SerialVersionUID(31L)
 case class RejFileDir (val file: FSFile, val hash: FileHash, val dir: FSDirectory)
     extends Rejection {
-  override val fsObj = file
-  private val serialVersionUID = 31L
+  val fsObj = file
 }
 
 @SerialVersionUID(32L)
@@ -89,23 +83,20 @@ case class RejFileFile (val file: FSFile,
                         val hash: FileHash,
                         val serverHash: FileHash)
     extends Rejection {
-  override val fsObj = file
-  private val serialVersionUID = 32L
+  val fsObj = file
 }
 
 @SerialVersionUID(33L)
 case class RejDirNone (val dir: FSDirectory)
     extends Rejection {
-  override val fsObj = dir
-  private val serialVersionUID = 33L
+  val fsObj = dir
 }
 
 @SerialVersionUID(34L)
 case class RejFileNone (val file: FSFile,
                         val hash: FileHash)
     extends Rejection {
-  override val fsObj = file
-  private val serialVersionUID = 34L
+  val fsObj = file
 }
 
 /** Notify a Client of rejected file updates */

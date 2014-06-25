@@ -6,7 +6,7 @@ sealed trait FSObject extends Serializable {
 }
 
 @SerialVersionUID(0L)
-case class FSDirectory (override val path: FSPath) extends FSObject
+case class FSDirectory (val path: FSPath) extends FSObject
 
 @SerialVersionUID(1L)
-case class FSFile (override val path: FSPath) extends FSObject
+case class FSFile (val path: FSPath) extends FSObject
