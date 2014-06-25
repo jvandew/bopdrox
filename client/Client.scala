@@ -174,6 +174,8 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
     new Thread(new ClientListener(this)(in)).start
     open = true
 
+    println("Ready for action!")
+
     // main loop to check for updated files
     while (true) {
 

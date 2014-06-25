@@ -180,8 +180,13 @@ object Utils {
 
 
   // Get the ObjectOutputStream for the given Socket
-  def getObjectOutputStream (sock: Socket) : ObjectOutputStream =
-    new ObjectOutputStream(new BufferedOutputStream(sock.getOutputStream))
+  def getObjectOutputStream (sock: Socket) : ObjectOutputStream = {
+    // must flush stream header or else we block when corresponding input stream is created
+    val out = new ObjectOutputStream(new BufferedOutputStream(sock.getOutputStream))
+    out.flush
+
+    out
+  }
 
 
   // find the relative path for a file. requires file to be contained within home
