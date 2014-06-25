@@ -98,8 +98,8 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
   def run : Unit = {
 
     val serv = new Socket(host, port)
-    val out = new ObjectOutputStream(serv.getOutputStream)
-    val in = new ObjectInputStream(serv.getInputStream)
+    val out = Utils.getObjectOutputStream(serv)
+    val in = Utils.getObjectInputStream(serv)
 
     def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
     val writeObject = Utils.checkedWrite(disconnect)(out)_

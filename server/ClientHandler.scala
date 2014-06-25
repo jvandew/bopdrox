@@ -14,8 +14,8 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
   val home = server.home
 
-  private val in = new ObjectInputStream(client.getInputStream)
-  private val out = new ObjectOutputStream(client.getOutputStream)
+  private val in = Utils.getObjectInputStream(client)
+  private val out = Utils.getObjectOutputStream(client)
 
   val getRelPath = Utils.getRelativePath(home) _
 
