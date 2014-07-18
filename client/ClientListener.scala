@@ -1,13 +1,16 @@
 package bopdrox.client
 
 import bopdrox.util.{Message, Utils}
-import java.io.{File, IOException, ObjectInputStream}
+import java.io.{IOException, ObjectInputStream}
 
 /* A ClientListener is a Runnable object designed to listen for file updates
  * from the server. */
-class ClientListener (client: Client) (in: ObjectInputStream) extends Runnable {
+class ClientListener (client: Client)
+                     (in: ObjectInputStream)
+                     (handle: IOException => Unit)
+    extends Runnable {
 
-  private def readObject: Option[Object] = Utils.checkedRead(client.disconnect)(in)
+  private def readObject: Option[Object] = Utils.checkedRead(handle)(in)
 
   def run : Unit = {
     while (true) {

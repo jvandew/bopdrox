@@ -28,13 +28,14 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
   val getRelPath = Utils.getRelativePath(home)_
 
   // store received Messages for later consumption
-  val messageQueue = new Queue[Message]
+  private[client] val messageQueue = new Queue[Message]
+  private[client] val sendQueue = new Queue[Message]
 
   private var open = false
 
 
   // disconnect handler
-  private[client] def disconnect (ioe: IOException) : Unit = {
+  private def disconnect (ioe: IOException) : Unit = {
     println("IOException received! Initiating hara-kiri...")
     ioe.printStackTrace
     sys.exit
@@ -107,7 +108,7 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
     // get list of files and hashes from server
     // TODO(jacob) currently assumes Client files are a subset of Server files
     readObject match {
-      case None => () // wait for termination
+      case None => () // wait for error handler
       case Some(FSListMessage(fsList)) => {
 
         // generate local file list and hashes
@@ -171,7 +172,8 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
     }
 
     // begin listener thread
-    new Thread(new ClientListener(this)(in)).start
+    new Thread(new ClientListener(this)(in)(disconnect)).start
+    new Thread(new ClientMessenger(this)(out)(disconnect)).start
     open = true
 
     println("Ready for action!")
@@ -289,7 +291,9 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
         case Nil => ()  // no updates
         case _ => {
           val msg = FSTransferMessage(updates)
-          writeObject(msg)
+          this.synchronized {
+            sendQueue.enqueue(msg)
+          }
         }
       }
 
@@ -297,7 +301,9 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
         case Nil => ()  // nothing removed
         case _ => {
           val msg = FSRemovedMessage(removed)
-          writeObject(msg)
+          this.synchronized {
+            sendQueue.enqueue(msg)
+          }
         }
       }
 
