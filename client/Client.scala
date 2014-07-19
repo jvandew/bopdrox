@@ -7,6 +7,7 @@ import bopdrox.util.{Ack, FLData, FLDirectory, FLFile, FSDirectory, FSFile,
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.{Socket, UnknownHostException}
 import scala.collection.mutable.{HashMap, Queue}
+import scala.concurrent.Lock
 
 // companion object for running a Client
 object Client {
@@ -33,6 +34,7 @@ class Client (val home: File) (val host: String) (val port: Int) extends Runnabl
 
   private var listener: ClientListener = null
   private var messenger: ClientMessenger = null
+  private[client] val messengerLock = new Lock
 
   private var open = false
 

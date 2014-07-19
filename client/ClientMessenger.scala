@@ -36,6 +36,9 @@ class ClientMessenger (client: Client)
 
   def run : Unit = {
 
+    // must retrieve lock from previous Messenger to operate Queue safely
+    client.messengerLock.acquire
+
     while (continue) {
       while (!client.sendQueue.isEmpty) {
 
@@ -49,5 +52,6 @@ class ClientMessenger (client: Client)
       Thread.sleep(100)
     }
 
+    client.messengerLock.release
   }
 }
