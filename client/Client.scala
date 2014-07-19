@@ -5,7 +5,7 @@ import bopdrox.util.{Ack, FLData, FLDirectory, FLFile, FSDirectory, FSFile,
                      FSTransferMessage, FTData, FTDirectory, FTFile, Message,
                      RejectUpdateMessage, Utils}
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
-import java.net.Socket
+import java.net.{Socket, UnknownHostException}
 import scala.collection.mutable.{HashMap, Queue}
 
 // companion object for running a Client
@@ -21,7 +21,7 @@ object Client {
   }
 }
 
-class Client (val home: File) (host: String) (port: Int) extends Runnable {
+class Client (val home: File) (val host: String) (val port: Int) extends Runnable {
 
   val hashes = new ClientMap
 
@@ -31,72 +31,13 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
   private[client] val messageQueue = new Queue[Message]
   private[client] val sendQueue = new Queue[Message]
 
+  private var listener: ClientListener = null
+  private var messenger: ClientMessenger = null
+
   private var open = false
 
 
-  // disconnect handler
-  private def disconnect (ioe: IOException) : Unit = {
-    println("IOException received! Initiating hara-kiri...")
-    ioe.printStackTrace
-    sys.exit
-  }
-
-
-  def isOpen : Boolean = open
-
-
-  // note this method is not called asnchronously
-  private def matchMessage (msg: Message) : Unit = msg match {
-
-    case FSTransferMessage(ftList) => {
-
-      ftList.foreach {
-        _ match {
-
-          // TODO(jacob) should probably check oldFSObj eventually
-          case FTDirectory(dir, _) => {
-            val emptyDir = Utils.newDir(home, dir)
-            hashes(dir) = DirData(emptyDir.lastModified)
-          }
-
-          // TODO(jacob) should probably check oldFSObj eventually
-          case FTFile(fsFile, contents, hash, _) => {
-            val file = Utils.newFile(home, fsFile)
-
-            hashes.lookupPath(fsFile.path) match {
-              case None => Utils.ensureDir(home, fsFile.path)
-              case Some(FileData(_, _)) => ()
-              case Some(DirData(_)) => file.delete
-            }
-
-            Utils.writeFile(file)(contents)
-            hashes(fsFile) = FileData(file.lastModified, hash)
-          }
-        }
-
-      }
-    }
-
-    case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
-
-    case FSRemovedMessage(removed) => {
-
-      removed.foreach { rem =>
-        val (fsObj, file) = rem match {
-          case FLFile(fsFile, _) => (fsFile, Utils.newFile(home, fsFile))
-          case FLDirectory(fsDir) => (fsDir, Utils.newDir(home, fsDir))
-        }
-
-        hashes.remove(fsObj)
-        Utils.dirDelete(file)
-      }
-    }
-
-    case _ => throw new IOException("Unknown or incorrect message received")
-  }
-
-
-  def run : Unit = {
+  def connect () : Unit = {
 
     val serv = new Socket(host, port)
     val out = Utils.getObjectOutputStream(serv)
@@ -171,21 +112,86 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
       case Some(_) => throw new IOException("Unknown or incorrect message received")
     }
 
-    // begin listener thread
-    new Thread(new ClientListener(this)(in)(disconnect)).start
-    new Thread(new ClientMessenger(this)(out)(disconnect)).start
+    // begin networking Threads
+    listener = new ClientListener(this)(in)(reconnectHandler)
+    messenger = new ClientMessenger(this)(out)(reconnectHandler)
+
+    new Thread(listener).start
+    new Thread(messenger).start
+
     open = true
 
     println("Ready for action!")
+  }
+
+
+  // disconnect handler
+  private def disconnect (ioe: IOException) : Unit = {
+    println("IOException received! Initiating hara-kiri...")
+    ioe.printStackTrace
+    sys.exit
+  }
+
+
+  // included for testing purposes
+  def isOpen : Boolean = open
+
+
+  // note this method is not called asnchronously
+  private def matchMessage (msg: Message) : Unit = msg match {
+
+    case FSTransferMessage(ftList) => {
+
+      ftList.foreach {
+        _ match {
+
+          // TODO(jacob) should probably check oldFSObj eventually
+          case FTDirectory(dir, _) => {
+            val emptyDir = Utils.newDir(home, dir)
+            hashes(dir) = DirData(emptyDir.lastModified)
+          }
+
+          // TODO(jacob) should probably check oldFSObj eventually
+          case FTFile(fsFile, contents, hash, _) => {
+            val file = Utils.newFile(home, fsFile)
+
+            hashes.lookupPath(fsFile.path) match {
+              case None => Utils.ensureDir(home, fsFile.path)
+              case Some(FileData(_, _)) => ()
+              case Some(DirData(_)) => file.delete
+            }
+
+            Utils.writeFile(file)(contents)
+            hashes(fsFile) = FileData(file.lastModified, hash)
+          }
+        }
+
+      }
+    }
+
+    case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
+
+    case FSRemovedMessage(removed) => {
+
+      removed.foreach { rem =>
+        val (fsObj, file) = rem match {
+          case FLFile(fsFile, _) => (fsFile, Utils.newFile(home, fsFile))
+          case FLDirectory(fsDir) => (fsDir, Utils.newDir(home, fsDir))
+        }
+
+        hashes.remove(fsObj)
+        Utils.dirDelete(file)
+      }
+    }
+
+    case _ => throw new IOException("Unknown or incorrect message received")
+  }
+
+
+  def pollFileSystem () : Unit = {
 
     // main loop to check for updated files
     while (true) {
-
-      // process any received Messages
-      // TODO(jacob) this could be an inconvenient way of handling Messages if we have a
-      // large Queue (unlikely with a single user) or a significantly large directory tree
-      while (!messageQueue.isEmpty)
-        matchMessage(messageQueue.dequeue)
 
       var keySet = hashes.keySet
       var updates = List[FTData]()
@@ -291,7 +297,7 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
         case Nil => ()  // no updates
         case _ => {
           val msg = FSTransferMessage(updates)
-          this.synchronized {
+          sendQueue.synchronized {
             sendQueue.enqueue(msg)
           }
         }
@@ -301,14 +307,67 @@ class Client (val home: File) (host: String) (port: Int) extends Runnable {
         case Nil => ()  // nothing removed
         case _ => {
           val msg = FSRemovedMessage(removed)
-          this.synchronized {
+          sendQueue.synchronized {
             sendQueue.enqueue(msg)
           }
         }
       }
 
-      Thread.sleep(500)
+      // process any received Messages
+      // TODO(jacob) this could be an inconvenient way of handling Messages if we have a
+      // large Queue (unlikely with a single user) or a significantly large directory tree
+      while (!messageQueue.isEmpty) {
+
+        val msg = messageQueue.synchronized {
+          messageQueue.dequeue
+        }
+
+        matchMessage(msg)
+      }
+
+      Thread.sleep(250)
+    }
+  }
+
+
+  /* TODO(jacob) the recursive nature of this method may lead to a stack overflow
+   * if we repeatedly fail to reconnect. I don't believe the compiler is smart
+   * enough to optimize this tail call.
+   *
+   * Note that this method is synchronized on Client within Listener and Messenger.
+   */
+  private def reconnectHandler (ioe: IOException) : Unit = {
+
+    println("Something has gone terribly wrong. Reconnecting...")
+
+    try {
+      val serv = new Socket(host, port)
+      val out = Utils.getObjectOutputStream(serv)
+      val in = Utils.getObjectInputStream(serv)
+
+      listener.continue = false
+      messenger.continue = false
+
+      listener = new ClientListener(this)(in)(reconnectHandler)
+      messenger = new ClientMessenger(this)(out)(reconnectHandler)
+
+      new Thread(listener).start
+      new Thread(messenger).start
+
+    } catch {
+      case _: IOException => reconnectHandler(ioe)
+      case _: UnknownHostException => reconnectHandler(ioe)
     }
 
+    println("...And we're back!")
+
   }
+
+
+  def run : Unit = {
+    // connect and manage files
+    connect
+    pollFileSystem
+  }
+
 }

@@ -2,7 +2,7 @@
 
 server: ClientHandler.scala package.scala Server.scala ServerData.scala
 	$(scalac)  \
-	  ServerData.scala     \
+		ServerData.scala     \
 		package.scala        \
 		ClientHandler.scala  \
 		Server.scala

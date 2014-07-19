@@ -10,13 +10,28 @@ class ClientListener (client: Client)
                      (handle: IOException => Unit)
     extends Runnable {
 
-  private def readObject: Option[Object] = Utils.checkedRead(handle)(in)
+  private[client] var continue = true
+
+
+  private def handler (ioe: IOException) : Unit = client.synchronized {
+
+    if (continue) {
+      // Messenger hasn't shut us down yet; commit murder-suicide
+      continue = false
+      handle(ioe)
+    }
+  }
+
+  private def readObject: Option[Object] = Utils.checkedRead(handler)(in)
 
   def run : Unit = {
-    while (true) {
+
+    while (continue) {
       readObject match {
-        case None => () // wait for termination
-        case Some(msg: Message) => client.messageQueue.enqueue(msg)
+        case None => ()
+        case Some(msg: Message) => client.messageQueue.synchronized {
+          client.messageQueue.enqueue(msg)
+        }
         case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }

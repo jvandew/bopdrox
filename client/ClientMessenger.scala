@@ -10,13 +10,23 @@ class ClientMessenger (client: Client)
                       (handle: IOException => Unit)
     extends Runnable {
 
-  private var curMsg: Option[Message] = None
+  private[client] var continue = true
+  private var msg: Message = null
 
-  private def handler (ioe: IOException) : Unit = curMsg match {
-    case None => handle(ioe)
-    case Some(msg) => {
-      client.synchronized {
-        msg +=: client.sendQueue
+  private def handler (ioe: IOException) : Unit = {
+
+    /* TODO(jacob) Absolutely ESSENTIAL that we add a Messenger lock to prevent
+     * a new Messenger from sending anything before this broken Message is
+     * re-queued at the front. Synchronization is not sufficient.
+     */
+    client.sendQueue.synchronized {
+      msg +=: client.sendQueue
+    }
+
+    client.synchronized {
+      if (continue) {
+        // Listener hasn't shut us down yet; commit murder-suicide
+        continue = false
         handle(ioe)
       }
     }
@@ -26,15 +36,17 @@ class ClientMessenger (client: Client)
 
   def run : Unit = {
 
-    while (true) {
+    while (continue) {
       while (!client.sendQueue.isEmpty) {
 
-        val msg = client.sendQueue.dequeue
-        curMsg = Some(msg)
+        client.sendQueue.synchronized {
+          msg = client.sendQueue.dequeue
+        }
+
         writeObject(msg)
       }
 
-      Thread.sleep(50)
+      Thread.sleep(100)
     }
 
   }
