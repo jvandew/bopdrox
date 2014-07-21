@@ -1,13 +1,14 @@
 package bopdrox.client
 
-import bopdrox.util.{Ack, FLData, FLDirectory, FLFile, FSDirectory, FSFile,
-                     FSListMessage, FSRemovedMessage, FSRequest,
+import bopdrox.util.{Ack, Connect, FLData, FLDirectory, FLFile, FSDirectory,
+                     FSFile, FSListMessage, FSRemovedMessage, FSRequest,
                      FSTransferMessage, FTData, FTDirectory, FTFile, Message,
                      RejectUpdateMessage, Utils}
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.{Socket, UnknownHostException}
 import scala.collection.mutable.{HashMap, Queue}
 import scala.concurrent.Lock
+import scala.util.Random
 
 // companion object for running a Client
 object Client {
@@ -36,6 +37,8 @@ class Client (val home: File) (val host: String) (val port: Int) extends Runnabl
   private var messenger: ClientMessenger = null
   private[client] val messengerLock = new Lock
 
+  val id = new String(Random.alphanumeric.take(32).toArray)
+
   private var open = false
 
 
@@ -47,6 +50,8 @@ class Client (val home: File) (val host: String) (val port: Int) extends Runnabl
 
     def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
     val writeObject = Utils.checkedWrite(disconnect)(out)_
+
+    writeObject(Connect(id))
 
     // get list of files and hashes from server
     // TODO(jacob) currently assumes Client files are a subset of Server files
@@ -346,6 +351,8 @@ class Client (val home: File) (val host: String) (val port: Int) extends Runnabl
       val serv = new Socket(host, port)
       val out = Utils.getObjectOutputStream(serv)
       val in = Utils.getObjectInputStream(serv)
+
+      Utils.checkedWrite(e => throw e)(out)(Connect(id))
 
       listener.continue = false
       messenger.continue = false

@@ -11,6 +11,11 @@ sealed trait Message extends Serializable
 case object Ack extends Message
 
 
+/** Connect to the Server. */
+@SerialVersionUID(60000024601L)
+case class Connect(val clientId: String) extends Message
+
+
 sealed trait FLData extends Serializable {
   val fsObj: FSObject
 }
@@ -63,6 +68,7 @@ case class FSRequest (val files: List[FSObject]) extends Message
 sealed trait Rejection extends Serializable {
   val fsObj: FSObject
 }
+
 
 @SerialVersionUID(30L)
 case class RejDirFile (val dir: FSDirectory,

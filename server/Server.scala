@@ -1,7 +1,7 @@
 package bopdrox.server
 
 import bopdrox.util.{FSDirectory, FSFile, Utils}
-import java.io.File
+import java.io.{File, IOException}
 import java.net.ServerSocket
 import scala.collection.mutable.HashMap
 
@@ -23,16 +23,15 @@ class Server (val home: File) (port: Int) extends Runnable {
 
   val getRelPath = Utils.getRelativePath(home)_
 
-  // store a list of all connected clients
-  // note since this is a var we sychronize on Server instead of clients directly
-  var clients = List[ClientHandler]()
+  // store a table of all connected Clients and their handlers
+  val clients = new HashMap[String, ClientHandler]
 
   // store file hashes of the most recent version
   // TODO(jacob) include version vectors at some point
   val hashes = new ServerMap
 
-  def dropClient (client: ClientHandler): Unit = this.synchronized {
-    clients = clients.diff(List(client))
+  def dropClient (client: ClientHandler): Unit = clients.synchronized {
+    clients.remove(client.id)
   }
 
   def isOpen : Boolean = open
@@ -63,13 +62,24 @@ class Server (val home: File) (port: Int) extends Runnable {
     println("listening for connections")
     while (true) {
       val client = serv.accept
-      val handler = new ClientHandler(this)(client)
 
-      this.synchronized {
-        clients ::= handler
+      try {
+        val handler = new ClientHandler(this)(client)
+
+        clients.synchronized {
+          clients.get(handler.id) match {
+
+            case None => {
+              clients(handler.id) = handler
+              new Thread(handler).start
+            }
+
+            case Some(ch) => ch.reconnect(client)
+          }
+        }
+      } catch {
+        case ioe: IOException => () // bad client connection
       }
-
-      new Thread(handler).start
     }
   }
 

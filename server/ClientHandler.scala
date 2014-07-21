@@ -1,10 +1,10 @@
 package bopdrox.server
 
-import bopdrox.util.{Ack, FileBytes, FileHash, FLDirectory, FLFile, FSDirectory,
-                     FSFile, FSListMessage, FSTransferMessage, FSRemovedMessage,
-                     FSRequest, FTData, FTDirectory, FTFile, Message, RejDirFile,
-                     RejDirNone, Rejection, RejectUpdateMessage, RejFileDir,
-                     RejFileFile, RejFileNone, Utils}
+import bopdrox.util.{Ack, Connect, FileBytes, FileHash, FLDirectory, FLFile,
+                     FSDirectory, FSFile, FSListMessage, FSTransferMessage,
+                     FSRemovedMessage, FSRequest, FTData, FTDirectory, FTFile,
+                     Message, RejDirFile, RejDirNone, Rejection, RejectUpdateMessage,
+                     RejFileDir, RejFileFile, RejFileNone, Utils}
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
 import scala.collection.mutable.Queue
@@ -34,6 +34,12 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
 
   // continue running this handler
   private var continue = true
+
+  // TODO(jacob) move this into run()
+  val id = disconRead match {
+    case Some(Connect(clientId)) => clientId
+    case _ => throw new IOException("Something went wrong during Client connection.")
+  }
 
 
   private def conflictDir (dir: FSDirectory) : FSDirectory = {
@@ -263,19 +269,23 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
       }
 
       rejections match {
-        case Nil => server.synchronized {
-          server.clients.foreach { c =>
-            if (!c.equals(this))
-              c.message(msg)
+        case Nil => server.clients.synchronized {
+          server.clients.foreach { kv =>
+            if (kv._1 != id) {
+              kv._2.message(msg)
+            }
           }
         }
+
         case _ => {
           message(RejectUpdateMessage(rejections))
           message(FSTransferMessage(originals ++ conflictCopies))
-          server.synchronized {
-            server.clients.foreach { c =>
-              if (!c.equals(this))
-                c.message(FSTransferMessage(good ++ conflictCopies))
+
+          server.clients.synchronized {
+            server.clients.foreach { kv =>
+              if (kv._1 != id) {
+                kv._2.message(FSTransferMessage(good ++ conflictCopies))
+              }
             }
           }
         }
@@ -303,10 +313,11 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
       }
 
       // forward message
-      server.synchronized {
-        server.clients.foreach { c =>
-          if (!c.equals(this))
-            c.message(msg)
+      server.clients.synchronized {
+        server.clients.foreach { kv =>
+          if (kv._1 != id) {
+            kv._2.message(msg)
+          }
         }
       }
 
@@ -316,7 +327,9 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
   }
 
 
-  def message (msg: Message) : Unit = disconWrite(msg)
+  def message (msg: Message) : Unit = sendQueue.synchronized {
+    sendQueue.enqueue(msg)
+  }
 
 
   def reconnect (newClient: Socket) : Unit = {
@@ -349,7 +362,9 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
     disconWrite(listMsg)
 
     disconRead match {
+
       case None => () // wait for termination
+
       case Some(FSRequest(files)) => {
 
         val fileList = files.map {
@@ -373,6 +388,7 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
           case Some(_) => throw new IOException("Unknown or incorrect message received")
         }
       }
+
       case Some(_) => throw new IOException("Unknown or incorrect message received")
     }
 
@@ -393,6 +409,8 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
         case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }
+
+    messenger.continue = false
 
   }
 }
