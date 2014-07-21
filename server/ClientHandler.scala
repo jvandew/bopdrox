@@ -7,17 +7,30 @@ import bopdrox.util.{Ack, FileBytes, FileHash, FLDirectory, FLFile, FSDirectory,
                      RejFileFile, RejFileNone, Utils}
 import java.io.{File, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.Socket
+import scala.collection.mutable.Queue
+import scala.concurrent.Lock
 
 /* A ClientHandler is a Runnable object designed to handle all communications
  * with a Client */
-class ClientHandler (server: Server) (client: Socket) extends Runnable {
+class ClientHandler (server: Server) (private var client: Socket) extends Runnable {
 
   val home = server.home
 
-  private val in = Utils.getObjectInputStream(client)
-  private val out = Utils.getObjectOutputStream(client)
+  private[server] val sendQueue = new Queue[Message]
+
+  private var messenger: CHMessenger = null
+  private[server] val messengerLock = new Lock
+
+  private var brokenConn = false
+
+  private var in = Utils.getObjectInputStream(client)
+  private val out = Utils.getObjectOutputStream(client) // not needed on reconnection
 
   val getRelPath = Utils.getRelativePath(home) _
+
+  private def disconRead: Option[Object] = Utils.checkedRead(disconnect)(in)
+  private val reconRead = Utils.checkedRead(reconnectHandler)_
+  private val disconWrite = Utils.checkedWrite(disconnect)(out)_
 
   // continue running this handler
   private var continue = true
@@ -56,10 +69,6 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
     server.dropClient(this)
     continue = false
   }
-
-
-  private def readObject: Option[Object] = Utils.checkedRead(disconnect)(in)
-  private val writeObject = Utils.checkedWrite(disconnect)(out)_
 
 
   /* Handle message matching and file operations. Note that due the variable
@@ -307,7 +316,28 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
   }
 
 
-  def message (msg: Message) : Unit = writeObject(msg)
+  def message (msg: Message) : Unit = disconWrite(msg)
+
+
+  def reconnect (newClient: Socket) : Unit = {
+
+    client = newClient
+    in = Utils.getObjectInputStream(client)
+
+    messenger = new CHMessenger(this)(out)
+    new Thread(messenger).start
+
+    brokenConn = false
+
+  }
+
+
+  private def reconnectHandler (ioe: IOException) : Unit = {
+    println("Something went horribly wrong. Waiting for Client to reconnect...")
+
+    messenger.continue = false
+    brokenConn = true
+  }
 
 
   def run : Unit = {
@@ -316,9 +346,9 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
 
     // send client a list of file names and hashes
     val listMsg = FSListMessage(server.hashes.flList)
-    writeObject(listMsg)
+    disconWrite(listMsg)
 
-    readObject match {
+    disconRead match {
       case None => () // wait for termination
       case Some(FSRequest(files)) => {
 
@@ -335,9 +365,9 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
         }
 
         val msg = FSTransferMessage(fileList)
-        writeObject(msg)
+        disconWrite(msg)
 
-        readObject match {
+        disconRead match {
           case None => () // wait for termination
           case Some(Ack) => ()
           case Some(_) => throw new IOException("Unknown or incorrect message received")
@@ -346,9 +376,18 @@ class ClientHandler (server: Server) (client: Socket) extends Runnable {
       case Some(_) => throw new IOException("Unknown or incorrect message received")
     }
 
+    messenger = new CHMessenger(this)(out)
+    new Thread(messenger).start
+
     // main loop to listen for updated files
     while (continue) {
-      readObject match {
+
+      // if some error arises we must wait for the Client to reconnect
+      while (brokenConn) {
+        Thread.sleep(100)
+      }
+
+      reconRead(in) match {
         case None => () // wait for termination
         case Some(msg: Message) => matchMessage(msg)
         case Some(_) => throw new IOException("Unknown or incorrect message received")
