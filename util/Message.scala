@@ -26,7 +26,7 @@ case class FLDirectory (val dir: FSDirectory) extends FLData {
 }
 
 @SerialVersionUID(11L)
-case class FLFile (val file: FSFile, val hash: FileHash) extends FLData {
+case class FLFile (val file: FSFile, val hash: Array[FileHash]) extends FLData {
   val fsObj = file
 }
 
@@ -49,7 +49,7 @@ case class FTDirectory (val dir: FSDirectory, val oldFSObj: Option[FLData])
 @SerialVersionUID(21L)
 case class FTFile (val file: FSFile,
                    val contents: FileBytes,
-                   val hash: FileHash,
+                   val hash: Array[FileHash],
                    val oldFSObj: Option[FLData])
     extends FTData {
   val fsObj = file
@@ -73,21 +73,21 @@ sealed trait Rejection extends Serializable {
 @SerialVersionUID(30L)
 case class RejDirFile (val dir: FSDirectory,
                        val serverFile: FSFile,
-                       val serverHash: FileHash)
+                       val serverHash: Array[FileHash])
     extends Rejection {
   val fsObj = dir
 }
 
 @SerialVersionUID(31L)
-case class RejFileDir (val file: FSFile, val hash: FileHash, val dir: FSDirectory)
+case class RejFileDir (val file: FSFile, val hash: Array[FileHash], val dir: FSDirectory)
     extends Rejection {
   val fsObj = file
 }
 
 @SerialVersionUID(32L)
 case class RejFileFile (val file: FSFile,
-                        val hash: FileHash,
-                        val serverHash: FileHash)
+                        val hash: Array[FileHash],
+                        val serverHash: Array[FileHash])
     extends Rejection {
   val fsObj = file
 }
@@ -100,7 +100,7 @@ case class RejDirNone (val dir: FSDirectory)
 
 @SerialVersionUID(34L)
 case class RejFileNone (val file: FSFile,
-                        val hash: FileHash)
+                        val hash: Array[FileHash])
     extends Rejection {
   val fsObj = file
 }

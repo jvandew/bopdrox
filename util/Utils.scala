@@ -10,12 +10,15 @@ import java.util.regex.Pattern
  * between Server and Client */
 object Utils {
 
-  val hash_algo = "SHA-512"
+  val hash_algo = "SHA-256"
 
   /* static hasher; note we hold invariant that the current digest
    * is empty by only calling hasher.digest(data) */
   // TODO(jacob) this could be enforced staticly if we so desire
   val hasher = MessageDigest.getInstance(hash_algo)
+
+
+  val MB = 1<<20
 
 
   /* Performs a read on some ObjectInputStream, checking that the operation
@@ -63,10 +66,12 @@ object Utils {
   }
 
 
-  // get the contents of a file and its hash value in that order
-  def contentsAndHash (file: File) : (FileBytes, FileHash) = {
+  // get the contents of a file and its hash values in that order
+  def contentsAndHash (file: File) : (FileBytes, Array[FileHash]) = {
     val bytes = readFile(file)
-    (bytes, hasher.digest(bytes))
+    val hashes = bytes.sliding(MB, MB).map(hasher.digest).toArray
+
+    (bytes, hashes)
   }
 
 
@@ -203,11 +208,12 @@ object Utils {
 
 
   // wrapper around hasher.digest(bytes)
-  def hashBytes (bytes: FileBytes) : FileHash = hasher.digest(bytes)
+  def hashBytes (bytes: FileBytes) : Array[FileHash] =
+    bytes.sliding(MB, MB).map(hasher.digest).toArray
 
 
   // helper function to hash the contents of a file
-  def hashFile (file: File) : FileHash = contentsAndHash(file)._2
+  def hashFile (file: File) : Array[FileHash] = hashBytes(readFile(file))
 
 
   // check if the given File object is a file and is empty
@@ -288,7 +294,12 @@ object Utils {
 
 
   // check whether or not two hashes match
-  def verifyHash (hash1: FileHash)(hash2: FileHash) : Boolean =
+  def verifyHash (hash1: Array[FileHash])(hash2: Array[FileHash]) : Boolean =
+    hash1.length == hash2.length && hash1.indices.forall(i => verifyChunkHash(hash1(i))(hash2(i)))
+
+
+  // check whether or not two hash chunks match
+  def verifyChunkHash (hash1: FileHash)(hash2: FileHash) : Boolean =
     hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
 
 

@@ -14,7 +14,7 @@ trait FSDirData extends FSData {
 
 trait FSFileData extends FSData {
   val time: Timestamp
-  val hash: FileHash
+  val hash: Array[FileHash]
 }
 
 

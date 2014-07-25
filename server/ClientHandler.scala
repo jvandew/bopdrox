@@ -55,7 +55,7 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
   }
 
 
-  private def conflictFile (fsFile: FSFile, contents: FileBytes, hash: FileHash) : FSFile = {
+  private def conflictFile (fsFile: FSFile, contents: FileBytes, hash: Array[FileHash]) : FSFile = {
 
     val conflictPath = Utils.conflictedPath(home)(fsFile.path)
     val fsConflictFile = FSFile(conflictPath)

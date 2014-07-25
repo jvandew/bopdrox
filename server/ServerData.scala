@@ -11,6 +11,6 @@ sealed trait ServerData extends FSData
 case class DirData (val time: Timestamp) extends ServerData with FSDirData
 
 case class FileData (val time: Timestamp,
-                     val hash: FileHash,
-                     val chain: List[(Timestamp, FileHash)])
+                     val hash: Array[FileHash],
+                     val chain: List[(Timestamp, Array[FileHash])])
     extends ServerData with FSFileData

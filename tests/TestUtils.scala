@@ -20,6 +20,9 @@ object TestUtils {
 
   // TODO(jacob) clean up is still very messy...
   def cleanUp (serverDir: File, clientDirs: List[File]) : Unit = {
+
+    breakpoint
+
     clientDirs.foreach(Utils.dirDelete(_))
     Utils.dirDelete(serverDir)
 
@@ -35,12 +38,19 @@ object TestUtils {
 
 
   // convert a hash in byte array format to a printable hex string
-  def hexHash (hash: FileHash) : String = {
-    val hexArr = hash.map { b =>
-      val hex = b.toInt.toHexString
-      ("00" + hex).substring(hex.length)
+  def hexHash (hash: Array[FileHash]) : String = {
+
+    val hexArr = hash.map { h =>
+      val hexed = h.map { b =>
+
+        val hex = b.toInt.toHexString
+        ("00" + hex).substring(hex.length)
+      }
+
+      hexed.reduce((h1, h2) => h1 + h2)
     }
-    hexArr.reduce((h1, h2) => h1 + h2)
+
+    hexArr.mkString(", ")
   }
 
 
