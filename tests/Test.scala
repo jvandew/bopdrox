@@ -205,7 +205,7 @@ object Test {
     val sleep = 5000
 
     val serverDir = buildTestDir(timeStr)
-    val server = new Server(serverDir)(9000)
+    val server = new Server(serverDir)(9000)(true)
     val serverThread = new Thread(server)
     serverThread.start
 
@@ -213,7 +213,7 @@ object Test {
                           new File("client2_test_dir_" + timeStr),
                           new File("client3_test_dir_" + timeStr))
     clientDirs.foreach(_.mkdir)
-    val clients = clientDirs.map(new Client(_)("localhost")(9000))
+    val clients = clientDirs.map(new Client(_)("localhost")(9000)(true))
     val clientThreads = clients.map(new Thread(_))
 
     val checkSync = verifySync(serverDir, clientDirs) _

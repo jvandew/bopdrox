@@ -9,15 +9,17 @@ object Server {
 
   /* Takes a home folder and a binding port */
   def main (args: Array[String]) : Unit = {
+
     val home = new File(args(0))
     val port = args(1).toInt
+    val debug = if (args.length >= 3 && args(2) == "-debug") true else false
 
-    val server = new Server(home)(port)
+    val server = new Server(home)(port)(debug)
     server.run
   }
 }
 
-class Server (val home: File) (port: Int) extends Runnable {
+class Server (val home: File) (port: Int) (debug: Boolean) extends Runnable {
 
   private var open = false
 
@@ -64,7 +66,7 @@ class Server (val home: File) (port: Int) extends Runnable {
       val client = serv.accept
 
       try {
-        val handler = new ClientHandler(this)(client)
+        val handler = new ClientHandler(this)(client)(debug)
 
         clients.synchronized {
           clients.get(handler.id) match {

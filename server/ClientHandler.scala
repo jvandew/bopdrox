@@ -12,7 +12,7 @@ import scala.concurrent.Lock
 
 /* A ClientHandler is a Runnable object designed to handle all communications
  * with a Client */
-class ClientHandler (server: Server) (private var client: Socket) extends Runnable {
+class ClientHandler (server: Server) (private var client: Socket) (debug: Boolean) extends Runnable {
 
   val home = server.home
 
@@ -337,7 +337,7 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
     client = newClient
     in = Utils.getObjectInputStream(client)
 
-    messenger = new CHMessenger(this)(out)
+    messenger = new CHMessenger(this)(out)(debug)
     new Thread(messenger).start
 
     brokenConn = false
@@ -392,7 +392,7 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
       case Some(_) => throw new IOException("Unknown or incorrect message received")
     }
 
-    messenger = new CHMessenger(this)(out)
+    messenger = new CHMessenger(this)(out)(debug)
     new Thread(messenger).start
 
     // main loop to listen for updated files
@@ -405,7 +405,15 @@ class ClientHandler (server: Server) (private var client: Socket) extends Runnab
 
       reconRead(in) match {
         case None => () // wait for termination
-        case Some(msg: Message) => matchMessage(msg)
+
+        case Some(msg: Message) => {
+          if (debug) {
+            println("DEBUG - Server received Message from " + Utils.printSocket(client) + ":\n\t" + msg)
+          }
+
+          matchMessage(msg)
+        }
+
         case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }

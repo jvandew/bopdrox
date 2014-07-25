@@ -8,12 +8,18 @@ sealed trait Message extends Serializable
   * is needed */
 // TODO(jacob) this is likely not necessary
 @SerialVersionUID(24601L)
-case object Ack extends Message
+case object Ack extends Message {
+
+  override def toString () : String = "Ack"
+}
 
 
 /** Connect to the Server. */
 @SerialVersionUID(60000024601L)
-case class Connect(val clientId: String) extends Message
+case class Connect(val clientId: String) extends Message {
+
+  override def toString () : String = "Connect: " + clientId
+}
 
 
 sealed trait FLData extends Serializable {
@@ -32,7 +38,10 @@ case class FLFile (val file: FSFile, val hash: Array[FileHash]) extends FLData {
 
 /** Send a list of FSObjects with file hashes over the wire */
 @SerialVersionUID(20000024601L)
-case class FSListMessage (val fsList: List[FLData]) extends Message
+case class FSListMessage (val fsList: List[FLData]) extends Message {
+
+  override def toString () : String = "FSListMessage"
+}
 
 
 sealed trait FTData extends Serializable {
@@ -57,12 +66,19 @@ case class FTFile (val file: FSFile,
 
 /** Transfer file contents over the wire */
 @SerialVersionUID(10000024601L)
-case class FSTransferMessage (val ftList: List[FTData]) extends Message
+case class FSTransferMessage (val ftList: List[FTData]) extends Message {
+
+  override def toString () : String =
+    "FSTransferMessage: " + ftList.map(_.fsObj).mkString(", ")
+}
 
 
 /** Send a request for a list of FSObjects */
 @SerialVersionUID(30000024601L)
-case class FSRequest (val files: List[FSObject]) extends Message
+case class FSRequest (val files: List[FSObject]) extends Message {
+
+  override def toString () : String = "FSRequest"
+}
 
 
 sealed trait Rejection extends Serializable {
@@ -107,9 +123,17 @@ case class RejFileNone (val file: FSFile,
 
 /** Notify a Client of rejected file updates */
 @SerialVersionUID(50000024601L)
-case class RejectUpdateMessage (val rejections: List[Rejection]) extends Message
+case class RejectUpdateMessage (val rejections: List[Rejection]) extends Message {
+
+  override def toString () : String =
+    "RejectUpdateMessage: " + rejections.map(_.fsObj).mkString(", ")
+}
 
 
 /** Transfer a list of files that have been deleted */
 @SerialVersionUID(40000024601L)
-case class FSRemovedMessage (val removed: List[FLData]) extends Message
+case class FSRemovedMessage (val removed: List[FLData]) extends Message {
+
+  override def toString () : String =
+    "FSRemovedMessage: " + removed.map(_.fsObj).mkString(", ")
+}

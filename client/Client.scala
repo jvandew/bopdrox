@@ -15,15 +15,17 @@ object Client {
 
   /* Takes a home folder and the address of a running Server */
   def main (args: Array[String]) : Unit = {
+
     val home = new File(args(0))
     val Array(host, port) = args(1).split(':')
+    val debug = if (args.length >= 3 && args(2) == "-debug") true else false
 
-    val client = new Client(home)(host)(port.toInt)
+    val client = new Client(home)(host)(port.toInt)(debug)
     client.run
   }
 }
 
-class Client (val home: File) (val host: String) (val port: Int) extends Runnable {
+class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean) extends Runnable {
 
   val hashes = new ClientMap
 
@@ -120,8 +122,8 @@ class Client (val home: File) (val host: String) (val port: Int) extends Runnabl
     }
 
     // begin networking Threads
-    listener = new ClientListener(this)(in)(reconnectHandler)
-    messenger = new ClientMessenger(this)(out)(reconnectHandler)
+    listener = new ClientListener(this)(in)(reconnectHandler)(debug)
+    messenger = new ClientMessenger(this)(out)(reconnectHandler)(debug)
 
     new Thread(listener).start
     new Thread(messenger).start
@@ -357,8 +359,8 @@ class Client (val home: File) (val host: String) (val port: Int) extends Runnabl
       listener.continue = false
       messenger.continue = false
 
-      listener = new ClientListener(this)(in)(reconnectHandler)
-      messenger = new ClientMessenger(this)(out)(reconnectHandler)
+      listener = new ClientListener(this)(in)(reconnectHandler)(debug)
+      messenger = new ClientMessenger(this)(out)(reconnectHandler)(debug)
 
       new Thread(listener).start
       new Thread(messenger).start

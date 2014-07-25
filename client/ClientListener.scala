@@ -8,6 +8,7 @@ import java.io.{IOException, ObjectInputStream}
 class ClientListener (client: Client)
                      (in: ObjectInputStream)
                      (handle: IOException => Unit)
+                     (debug: Boolean)
     extends Runnable {
 
   private[client] var continue = true
@@ -29,9 +30,17 @@ class ClientListener (client: Client)
     while (continue) {
       readObject match {
         case None => ()
-        case Some(msg: Message) => client.messageQueue.synchronized {
-          client.messageQueue.enqueue(msg)
+
+        case Some(msg: Message) => {
+          if (debug) {
+            println("DEBUG - Client received Message:\n\t" + msg)
+          }
+
+          client.messageQueue.synchronized {
+            client.messageQueue.enqueue(msg)
+          }
         }
+
         case Some(_) => throw new IOException("Unknown or incorrect message received")
       }
     }

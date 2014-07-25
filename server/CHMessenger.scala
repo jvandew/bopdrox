@@ -5,7 +5,7 @@ import java.io.{IOException, ObjectOutputStream}
 
 /* A CHMessenger is a Runnable object responsible for passing updates from
  * Server to Client. */
-class CHMessenger (ch: ClientHandler) (out: ObjectOutputStream) extends Runnable {
+class CHMessenger (ch: ClientHandler) (out: ObjectOutputStream) (debug: Boolean) extends Runnable {
 
   private[server] var continue = true
   private var msg: Message = null
@@ -31,6 +31,10 @@ class CHMessenger (ch: ClientHandler) (out: ObjectOutputStream) extends Runnable
 
         ch.sendQueue.synchronized {
           msg = ch.sendQueue.dequeue
+        }
+
+        if (debug) {
+          println("DEBUG - Server sending Message:\n\t" + msg)
         }
 
         writeObject(msg)

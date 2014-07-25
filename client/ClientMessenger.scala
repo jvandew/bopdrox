@@ -8,6 +8,7 @@ import java.io.{IOException, ObjectOutputStream}
 class ClientMessenger (client: Client)
                       (out: ObjectOutputStream)
                       (handle: IOException => Unit)
+                      (debug: Boolean)
     extends Runnable {
 
   private[client] var continue = true
@@ -44,6 +45,10 @@ class ClientMessenger (client: Client)
 
         client.sendQueue.synchronized {
           msg = client.sendQueue.dequeue
+        }
+
+        if (debug) {
+          println("DEBUG - Client sending Message:\n\t" + msg)
         }
 
         writeObject(msg)
