@@ -1,7 +1,11 @@
 package bopdrox.util
 
+import scala.util.Random
+
 /** Algeraic datatype for Messages **/
-sealed trait Message extends Serializable
+sealed trait Message extends Serializable {
+  val id = new String(Random.alphanumeric.take(8).toArray)
+}
 
 
 /** A message to be sent to acknowledge a received message when no other reply
@@ -10,7 +14,7 @@ sealed trait Message extends Serializable
 @SerialVersionUID(24601L)
 case object Ack extends Message {
 
-  override def toString () : String = "Ack"
+  override def toString () : String = id + " - Ack"
 }
 
 
@@ -18,7 +22,7 @@ case object Ack extends Message {
 @SerialVersionUID(60000024601L)
 case class Connect(val clientId: String) extends Message {
 
-  override def toString () : String = "Connect: " + clientId
+  override def toString () : String = id + " - Connect: " + clientId
 }
 
 
@@ -40,7 +44,7 @@ case class FLFile (val file: FSFile, val hash: Array[FileHash]) extends FLData {
 @SerialVersionUID(20000024601L)
 case class FSListMessage (val fsList: List[FLData]) extends Message {
 
-  override def toString () : String = "FSListMessage"
+  override def toString () : String = id + " - FSListMessage"
 }
 
 
@@ -69,7 +73,7 @@ case class FTFile (val file: FSFile,
 case class FSTransferMessage (val ftList: List[FTData]) extends Message {
 
   override def toString () : String =
-    "FSTransferMessage: " + ftList.map(_.fsObj).mkString(", ")
+    id + " - FSTransferMessage: " + ftList.map(_.fsObj).mkString(", ")
 }
 
 
@@ -77,7 +81,7 @@ case class FSTransferMessage (val ftList: List[FTData]) extends Message {
 @SerialVersionUID(30000024601L)
 case class FSRequest (val files: List[FSObject]) extends Message {
 
-  override def toString () : String = "FSRequest"
+  override def toString () : String = id + " - FSRequest"
 }
 
 
@@ -126,7 +130,7 @@ case class RejFileNone (val file: FSFile,
 case class RejectUpdateMessage (val rejections: List[Rejection]) extends Message {
 
   override def toString () : String =
-    "RejectUpdateMessage: " + rejections.map(_.fsObj).mkString(", ")
+    id + " - RejectUpdateMessage: " + rejections.map(_.fsObj).mkString(", ")
 }
 
 
@@ -135,5 +139,5 @@ case class RejectUpdateMessage (val rejections: List[Rejection]) extends Message
 case class FSRemovedMessage (val removed: List[FLData]) extends Message {
 
   override def toString () : String =
-    "FSRemovedMessage: " + removed.map(_.fsObj).mkString(", ")
+    id + " - FSRemovedMessage: " + removed.map(_.fsObj).mkString(", ")
 }

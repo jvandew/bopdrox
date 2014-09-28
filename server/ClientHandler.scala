@@ -279,12 +279,14 @@ class ClientHandler (server: Server) (private var client: Socket) (debug: Boolea
 
         case _ => {
           message(RejectUpdateMessage(rejections))
-          message(FSTransferMessage(originals ++ conflictCopies))
+          message(FSTransferMessage(originals))
+          message(FSTransferMessage(conflictCopies))
 
           server.clients.synchronized {
             server.clients.foreach { kv =>
               if (kv._1 != id) {
-                kv._2.message(FSTransferMessage(good ++ conflictCopies))
+                kv._2.message(FSTransferMessage(good))
+                kv._2.message(FSTransferMessage(conflictCopies))
               }
             }
           }

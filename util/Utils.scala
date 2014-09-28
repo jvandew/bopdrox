@@ -216,6 +216,27 @@ object Utils {
   def hashFile (file: File) : Array[FileHash] = hashBytes(readFile(file))
 
 
+  // convert a hash in byte array format to a printable hex string
+  def hexHash (hash: Array[FileHash]) : String = {
+
+    val hexArr = hash.map { h =>
+      val hexed = h.map { b =>
+
+        val hex = b.toInt.toHexString
+        ("00" + hex).substring(hex.length)
+      }
+
+      hexed.reduce((h1, h2) => h1 + h2)
+    }
+
+    hexArr.mkString(", ")
+  }
+
+
+  // shortcut to printable-hash a file
+  def hexHash (file: File) : String = hexHash(hashFile(file))
+
+
   // check if the given File object is a file and is empty
   def isEmptyFile (file: File) : Boolean = file.isFile && (file.length == 0)
 

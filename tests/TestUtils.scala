@@ -37,23 +37,6 @@ object TestUtils {
   }
 
 
-  // convert a hash in byte array format to a printable hex string
-  def hexHash (hash: Array[FileHash]) : String = {
-
-    val hexArr = hash.map { h =>
-      val hexed = h.map { b =>
-
-        val hex = b.toInt.toHexString
-        ("00" + hex).substring(hex.length)
-      }
-
-      hexed.reduce((h1, h2) => h1 + h2)
-    }
-
-    hexArr.mkString(", ")
-  }
-
-
   def printMap[Data <: FSData, DirData <: Data with FSDirData, FileData <: Data with FSFileData] (desc: String) (map: FSMap[Data, DirData, FileData]) : Unit = {
 
     println(desc)
@@ -64,7 +47,7 @@ object TestUtils {
     }
     { kv: (FSFile, FileData) =>
       val path = Utils.joinPath(kv._1.path)
-      val hash = hexHash(kv._2.hash).substring(0, 16)
+      val hash = Utils.hexHash(kv._2.hash).substring(0, 16)
       println(path + " : " + hash)
     }
 

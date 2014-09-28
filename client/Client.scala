@@ -39,7 +39,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
   private var messenger: ClientMessenger = null
   private[client] val messengerLock = new Lock
 
-  val id = new String(Random.alphanumeric.take(32).toArray)
+  val id = new String(Random.alphanumeric.take(16).toArray)
 
   private var open = false
 
@@ -147,53 +147,58 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
 
 
   // note this method is not called asnchronously
-  private def matchMessage (msg: Message) : Unit = msg match {
+  private def matchMessage (msg: Message) : Unit = {
 
-    case FSTransferMessage(ftList) => {
+    msg match {
 
-      ftList.foreach {
-        _ match {
+      case FSTransferMessage(ftList) => {
+        ftList.foreach {
+          _ match {
 
-          // TODO(jacob) should probably check oldFSObj eventually
-          case FTDirectory(dir, _) => {
-            val emptyDir = Utils.newDir(home, dir)
-            hashes(dir) = DirData(emptyDir.lastModified)
-          }
-
-          // TODO(jacob) should probably check oldFSObj eventually
-          case FTFile(fsFile, contents, hash, _) => {
-            val file = Utils.newFile(home, fsFile)
-
-            hashes.lookupPath(fsFile.path) match {
-              case None => Utils.ensureDir(home, fsFile.path)
-              case Some(FileData(_, _)) => ()
-              case Some(DirData(_)) => file.delete
+            // TODO(jacob) should probably check oldFSObj eventually
+            case FTDirectory(dir, _) => {
+              val emptyDir = Utils.newDir(home, dir)
+              hashes(dir) = DirData(emptyDir.lastModified)
             }
 
-            Utils.writeFile(file)(contents)
-            hashes(fsFile) = FileData(file.lastModified, hash)
+            // TODO(jacob) should probably check oldFSObj eventually
+            case FTFile(fsFile, contents, hash, _) => {
+              val file = Utils.newFile(home, fsFile)
+
+              hashes.lookupPath(fsFile.path) match {
+                case None => Utils.ensureDir(home, fsFile.path)
+                case Some(FileData(_, _)) => ()
+                case Some(DirData(_)) => file.delete
+              }
+
+              Utils.writeFile(file)(contents)
+              hashes(fsFile) = FileData(file.lastModified, hash)
+            }
           }
-        }
 
+        }
       }
+
+      case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
+
+      case FSRemovedMessage(removed) => {
+        removed.foreach { rem =>
+          val (fsObj, file) = rem match {
+            case FLFile(fsFile, _) => (fsFile, Utils.newFile(home, fsFile))
+            case FLDirectory(fsDir) => (fsDir, Utils.newDir(home, fsDir))
+          }
+
+          hashes.remove(fsObj)
+          Utils.dirDelete(file)
+        }
+      }
+
+      case _ => throw new IOException("Unknown or incorrect message received")
     }
 
-    case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
-
-    case FSRemovedMessage(removed) => {
-
-      removed.foreach { rem =>
-        val (fsObj, file) = rem match {
-          case FLFile(fsFile, _) => (fsFile, Utils.newFile(home, fsFile))
-          case FLDirectory(fsDir) => (fsDir, Utils.newDir(home, fsDir))
-        }
-
-        hashes.remove(fsObj)
-        Utils.dirDelete(file)
-      }
+    if (debug) {
+      println("DEBUG - Client " + id + " processed Message:\n\t" + msg)
     }
-
-    case _ => throw new IOException("Unknown or incorrect message received")
   }
 
 
@@ -207,6 +212,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
 
       Utils.dirForeach(home) { file =>
 
+        val time = file.lastModified
         val path = getRelPath(file)
         val fsFile = FSFile(path)
 
@@ -215,20 +221,18 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
           case None => {
             val (bytes, hash) = Utils.contentsAndHash(file)
 
-            hashes(fsFile) = FileData(file.lastModified, hash)
+            hashes(fsFile) = FileData(time, hash)
             updates ::= FTFile(fsFile, bytes, hash, None)
           }
 
           case Some(fileData: FileData) => {
-
             // TODO(jacob) it's extremely unlikely that changing the system
             //             clock could break this check
-            if (fileData.time != file.lastModified) {
-
-              val oldFSObj = FLFile(fsFile, fileData.hash)
+            if (time != fileData.time) {
               val (bytes, hash) = Utils.contentsAndHash(file)
+              val oldFSObj = FLFile(fsFile, fileData.hash)
 
-              hashes(fsFile) = FileData(file.lastModified, hash)
+              hashes(fsFile) = FileData(time, hash)
               updates ::= FTFile(fsFile, bytes, hash, Some(oldFSObj))
               keySet -= fsFile
             }
@@ -238,13 +242,12 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
           }
 
           case Some(dirData) => {
-
             val fsDir = FSDirectory(path)
             val oldFSObj = FLDirectory(fsDir)
             val (bytes, hash) = Utils.contentsAndHash(file)
 
             hashes.remove(fsDir)
-            hashes(fsFile) = FileData(file.lastModified, hash)
+            hashes(fsFile) = FileData(time, hash)
             updates ::= FTFile(fsFile, bytes, hash, Some(oldFSObj))
             keySet -= fsDir
           }
@@ -302,13 +305,9 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
         }
       }
 
-      updates match {
-        case Nil => ()  // no updates
-        case _ => {
-          val msg = FSTransferMessage(updates)
-          sendQueue.synchronized {
-            sendQueue.enqueue(msg)
-          }
+      updates.foreach { update =>
+        sendQueue.synchronized {
+          sendQueue.enqueue(FSTransferMessage(List(update)))
         }
       }
 

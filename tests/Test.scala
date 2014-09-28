@@ -145,8 +145,8 @@ object Test {
     val clientHashes = clientDirs.map(home => Utils.hashFile(Utils.newFile(home, fsFile)))
 
     if (!clientHashes.forall(Utils.verifyHash(serverHash))) {
-      println("FAILED!:\n" + TestUtils.hexHash(serverHash))
-      clientHashes.foreach(hash => println(TestUtils.hexHash(hash)))
+      println("FAILED!:\n" + Utils.hexHash(serverHash))
+      clientHashes.foreach(hash => println(Utils.hexHash(hash)))
 
       println("done")
       false
@@ -202,7 +202,7 @@ object Test {
 
     // quadruple filesystem scanning interval is a reasonable requirement
     // (3*500) potentially for each Client plus an extra 500ms for overhead
-    val sleep = 5000
+    val sleep = 2000
 
     val serverDir = buildTestDir(timeStr)
     val server = new Server(serverDir)(9000)(true)
@@ -261,7 +261,7 @@ object Test {
       List("\n\t\n\t\n", "stuff", " hi"),
       List("hi", " ", "there"),
       List("hit", " ", "here"),
-      List(new String(Array.tabulate(10*Utils.MB + 1357)(i => if (i % 13 == 0) 'b' else 'a')), "a"))
+      List(new String(Array.tabulate(50*Utils.MB + 1357)(i => if (i % 13 == 0) 'b' else 'a')), "a"))
 
     println("Testing single client file creation...")
     testFiles.foreach(fsFile => createAndTrack(clientDirs(0), fsFile))

@@ -33,7 +33,7 @@ class ClientListener (client: Client)
 
         case Some(msg: Message) => {
           if (debug) {
-            println("DEBUG - Client received Message:\n\t" + msg)
+            println("DEBUG - Client " + client.id + " received Message:\n\t" + msg)
           }
 
           client.messageQueue.synchronized {

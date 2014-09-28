@@ -48,7 +48,7 @@ class ClientMessenger (client: Client)
         }
 
         if (debug) {
-          println("DEBUG - Client sending Message:\n\t" + msg)
+          println("DEBUG - Client " + client.id + " sending Message:\n\t" + msg)
         }
 
         writeObject(msg)
