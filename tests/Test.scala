@@ -96,7 +96,7 @@ object Test {
   def createAndTrack (home: File, fsFile: FSFile) : Unit = {
     val file = Utils.newFile(home, fsFile)
     file.createNewFile
-    refMap(fsFile) = FileData(file.lastModified, Utils.hashFile(file))
+    refMap(fsFile) = FileData(file.lastModified, file.length, Utils.hashFile(file))
   }
 
 

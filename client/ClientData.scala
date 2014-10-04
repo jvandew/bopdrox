@@ -8,6 +8,5 @@ sealed trait ClientData extends FSData
 
 case class DirData (val time: Timestamp) extends ClientData with FSDirData
 
-case class FileData (val time: Timestamp,
-                     val hash: Array[FileHash])
+case class FileData (val time: Timestamp, val length: Long, val hash: Array[FileHash])
     extends ClientData with FSFileData

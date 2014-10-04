@@ -65,9 +65,10 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
         Utils.dirForeach(home) { file =>
           val hash = Utils.hashFile(file)
           val time = file.lastModified
+          val length = file.length
           val fsFile = FSFile(getRelPath(file))
 
-          hashes(fsFile) = FileData(time, hash)
+          hashes(fsFile) = FileData(time, length, hash)
         }
         { dir =>
           val time = dir.lastModified
@@ -79,10 +80,10 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
         val filtered = fsList.filter { flData =>
           (flData, hashes.lookupPath(flData.fsObj.path)) match {
             case (_, None) => true
-            case (FLDirectory(_), Some(DirData(_))) => false
-            case (FLDirectory(_), Some(FileData(_, _))) => true
-            case (FLFile(_, _), Some(DirData(_))) => true
-            case (FLFile(_, hash1), Some(FileData(_, hash2))) => !Utils.verifyHash(hash1)(hash2)
+            case (_: FLDirectory, Some(_: DirData)) => false
+            case (_: FLDirectory, Some(_: FileData)) => true
+            case (_: FLFile, Some(_: DirData)) => true
+            case (FLFile(_, hash1), Some(FileData(_, _, hash2))) => !Utils.verifyHash(hash1)(hash2)
           }
         }
 
@@ -108,7 +109,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
                   val file = Utils.newFile(home, fsFile)
 
                   Utils.writeFile(file)(contents)
-                  hashes(fsFile) = FileData(file.lastModified, hash)
+                  hashes(fsFile) = FileData(file.lastModified, file.length, hash)
                 }
               }
             }
@@ -167,12 +168,12 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
 
               hashes.lookupPath(fsFile.path) match {
                 case None => Utils.ensureDir(home, fsFile.path)
-                case Some(FileData(_, _)) => ()
-                case Some(DirData(_)) => file.delete
+                case Some(_: FileData) => ()
+                case Some(_: DirData) => file.delete
               }
 
               Utils.writeFile(file)(contents)
-              hashes(fsFile) = FileData(file.lastModified, hash)
+              hashes(fsFile) = FileData(file.lastModified, file.length, hash)
             }
           }
 
@@ -213,6 +214,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
       Utils.dirForeach(home) { file =>
 
         val time = file.lastModified
+        val length = file.length
         val path = getRelPath(file)
         val fsFile = FSFile(path)
 
@@ -221,18 +223,18 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
           case None => {
             val (bytes, hash) = Utils.contentsAndHash(file)
 
-            hashes(fsFile) = FileData(time, hash)
+            hashes(fsFile) = FileData(time, length, hash)
             updates ::= FTFile(fsFile, bytes, hash, None)
           }
 
           case Some(fileData: FileData) => {
             // TODO(jacob) it's extremely unlikely that changing the system
             //             clock could break this check
-            if (time != fileData.time) {
+            if (time != fileData.time && length != fileData.length) {
               val (bytes, hash) = Utils.contentsAndHash(file)
               val oldFSObj = FLFile(fsFile, fileData.hash)
 
-              hashes(fsFile) = FileData(time, hash)
+              hashes(fsFile) = FileData(time, length, hash)
               updates ::= FTFile(fsFile, bytes, hash, Some(oldFSObj))
               keySet -= fsFile
             }
@@ -247,7 +249,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
             val (bytes, hash) = Utils.contentsAndHash(file)
 
             hashes.remove(fsDir)
-            hashes(fsFile) = FileData(time, hash)
+            hashes(fsFile) = FileData(time, length, hash)
             updates ::= FTFile(fsFile, bytes, hash, Some(oldFSObj))
             keySet -= fsDir
           }
