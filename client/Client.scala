@@ -1,9 +1,9 @@
 package bopdrox.client
 
 import bopdrox.util.{Ack, Connect, FLData, FLDirectory, FLFile, FSDirectory,
-                     FSFile, FSListMessage, FSRemovedMessage, FSRequest,
-                     FSTransferMessage, FTData, FTDirectory, FTFile, Message,
-                     RejectUpdateMessage, Utils}
+                     FSFile, FSInitMessage, FSListMessage, FSRemovedMessage,
+                     FSRequest, FSTransferMessage, FTData, FTDirectory,
+                     FTFile, Message, RejectUpdateMessage, Utils}
 import java.io.{File, FileInputStream, IOException, ObjectInputStream, ObjectOutputStream}
 import java.net.{Socket, UnknownHostException}
 import scala.collection.mutable.{HashMap, Queue}
@@ -92,7 +92,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
 
         readObject match {
           case None => () // wait for termination
-          case Some(FSTransferMessage(ftList)) => {
+          case Some(FSInitMessage(ftList)) => {
 
             // Process list of new files
             ftList.foreach {
@@ -152,32 +152,22 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
 
     msg match {
 
-      case FSTransferMessage(ftList) => {
-        ftList.foreach {
-          _ match {
+      case FSTransferMessage(FTDirectory(dir, _)) => {
+        val emptyDir = Utils.newDir(home, dir)
+        hashes(dir) = DirData(emptyDir.lastModified)
+      }
 
-            // TODO(jacob) should probably check oldFSObj eventually
-            case FTDirectory(dir, _) => {
-              val emptyDir = Utils.newDir(home, dir)
-              hashes(dir) = DirData(emptyDir.lastModified)
-            }
+      case FSTransferMessage(FTFile(fsFile, contents, hash, _)) => {
+        val file = Utils.newFile(home, fsFile)
 
-            // TODO(jacob) should probably check oldFSObj eventually
-            case FTFile(fsFile, contents, hash, _) => {
-              val file = Utils.newFile(home, fsFile)
-
-              hashes.lookupPath(fsFile.path) match {
-                case None => Utils.ensureDir(home, fsFile.path)
-                case Some(_: FileData) => ()
-                case Some(_: DirData) => file.delete
-              }
-
-              Utils.writeFile(file)(contents)
-              hashes(fsFile) = FileData(file.lastModified, file.length, hash)
-            }
-          }
-
+        hashes.lookupPath(fsFile.path) match {
+          case None => Utils.ensureDir(home, fsFile.path)
+          case Some(_: FileData) => ()
+          case Some(_: DirData) => file.delete
         }
+
+        Utils.writeFile(file)(contents)
+        hashes(fsFile) = FileData(file.lastModified, file.length, hash)
       }
 
       case RejectUpdateMessage(rejections) => ()  // will receive corrections from Server momentarily
@@ -309,7 +299,7 @@ class Client (val home: File) (val host: String) (val port: Int) (debug: Boolean
 
       updates.foreach { update =>
         sendQueue.synchronized {
-          sendQueue.enqueue(FSTransferMessage(List(update)))
+          sendQueue.enqueue(FSTransferMessage(update))
         }
       }
 

@@ -70,10 +70,17 @@ case class FTFile (val file: FSFile,
 
 /** Transfer file contents over the wire */
 @SerialVersionUID(10000024601L)
-case class FSTransferMessage (val ftList: List[FTData]) extends Message {
+case class FSTransferMessage (val ftData: FTData) extends Message {
+
+  override def toString () : String = id + " - FSTransferMessage: " + ftData.fsObj
+}
+
+/** Transfer file contents over the wire */
+@SerialVersionUID(70000024601L)
+case class FSInitMessage (val ftList: List[FTData]) extends Message {
 
   override def toString () : String =
-    id + " - FSTransferMessage: " + ftList.map(_.fsObj).mkString(", ")
+    id + " - FSInitMessage: " + ftList.map(_.fsObj).mkString(", ")
 }
 
 
@@ -127,10 +134,9 @@ case class RejFileNone (val file: FSFile,
 
 /** Notify a Client of rejected file updates */
 @SerialVersionUID(50000024601L)
-case class RejectUpdateMessage (val rejections: List[Rejection]) extends Message {
+case class RejectUpdateMessage (val rejection: Rejection) extends Message {
 
-  override def toString () : String =
-    id + " - RejectUpdateMessage: " + rejections.map(_.fsObj).mkString(", ")
+  override def toString () : String = id + " - RejectUpdateMessage: " + rejection.fsObj
 }
 
 

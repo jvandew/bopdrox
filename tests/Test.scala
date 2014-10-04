@@ -250,8 +250,9 @@ object Test {
       FSFile(List("empty_dir", "test")),
       FSFile(List("nested", "nested", "nested", "test2")),
       FSFile(List("nested", "nested", "nested", "empty_dir", "test.test")),
-      FSFile(List("nested", "nested", "new_file")),
-      FSFile(List("long_file")))
+      FSFile(List("nested", "nested", "new_file"))
+      // FSFile(List("long_file"))
+    )
 
     val testStrings = List(
       List("", "", ""),
@@ -260,8 +261,9 @@ object Test {
       List("l", "o", "t", "s", " ", "o", "f", " ", "t", "h", "i", "n", "g", "s"),
       List("\n\t\n\t\n", "stuff", " hi"),
       List("hi", " ", "there"),
-      List("hit", " ", "here"),
-      List(new String(Array.tabulate(50*Utils.MB + 1357)(i => if (i % 13 == 0) 'b' else 'a')), "a"))
+      List("hit", " ", "here")
+      // List(new String(Array.tabulate(50*Utils.MB + 1357)(i => if (i % 13 == 0) 'b' else 'a')), "a")
+    )
 
     println("Testing single client file creation...")
     testFiles.foreach(fsFile => createAndTrack(clientDirs(0), fsFile))
@@ -284,7 +286,7 @@ object Test {
     createAndTrack(clientDirs(0), testFiles(4))
     createAndTrack(clientDirs(1), testFiles(5))
     createAndTrack(clientDirs(1), testFiles(6))
-    createAndTrack(clientDirs(2), testFiles(7))
+    // createAndTrack(clientDirs(2), testFiles(7))
 
     Thread.sleep(sleep)
     checkSync(server, clients)
@@ -298,7 +300,7 @@ object Test {
     deleteAndUntrack(clientDirs(2), testFiles(4))
     deleteAndUntrack(clientDirs(0), testFiles(5))
     deleteAndUntrack(clientDirs(0), testFiles(6))
-    deleteAndUntrack(clientDirs(2), testFiles(7))
+    // deleteAndUntrack(clientDirs(2), testFiles(7))
 
     Thread.sleep(sleep)
     checkSync(server, clients)
@@ -330,7 +332,7 @@ object Test {
     deleteAndUntrack(clientDirs(1), testFiles(4))
     deleteAndUntrack(clientDirs(2), testFiles(5))
     deleteAndUntrack(clientDirs(0), testFiles(6))
-    deleteAndUntrack(clientDirs(1), testFiles(7))
+    // deleteAndUntrack(clientDirs(1), testFiles(7))
 
     Thread.sleep(sleep)
     checkSync(server, clients)
@@ -344,7 +346,7 @@ object Test {
     createWriteAndTrack(clientDirs(0), testFiles(4))(testStrings(4))
     createWriteAndTrack(clientDirs(1), testFiles(5))(testStrings(5))
     createWriteAndTrack(clientDirs(2), testFiles(6))(testStrings(6))
-    createWriteAndTrack(clientDirs(0), testFiles(7))(testStrings(7))
+    // createWriteAndTrack(clientDirs(0), testFiles(7))(testStrings(7))
 
     Thread.sleep(sleep)
     checkSync(server, clients)
@@ -360,8 +362,8 @@ object Test {
     fileMultiwrite(clientDirs(1), testFiles(4))(testStrings(4))
     fileMultiwrite(clientDirs(2), testFiles(5))(testStrings(5))
     fileMultiwrite(clientDirs(0), testFiles(6))(testStrings(6))
-    fileMultiwrite(clientDirs(1), testFiles(7))(testStrings(7))
-    fileMultiwrite(clientDirs(2), testFiles(7))(List(new String(Array.tabulate(14*Utils.MB)(_ => 'c'))))
+    // fileMultiwrite(clientDirs(1), testFiles(7))(testStrings(7))
+    // fileMultiwrite(clientDirs(2), testFiles(7))(List(new String(Array.tabulate(14*Utils.MB)(_ => 'c'))))
 
     Thread.sleep(sleep)
     checkSync(server, clients)
