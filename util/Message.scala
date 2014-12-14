@@ -62,6 +62,7 @@ case class FTDirectory (val dir: FSDirectory, val oldFSObj: Option[FLData])
 @SerialVersionUID(21L)
 case class FTFile (val file: FSFile,
                    val contents: FileBytes,
+                   val position: Int,
                    val hash: Array[FileHash],
                    val oldFSObj: Option[FLData])
     extends FTData {

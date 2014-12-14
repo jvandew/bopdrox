@@ -1,7 +1,8 @@
 package bopdrox.util
 
 import java.io.{BufferedInputStream, BufferedOutputStream, File, FileInputStream,
-                FileOutputStream, IOException, ObjectInputStream, ObjectOutputStream}
+                FileOutputStream, IOException, ObjectInputStream, ObjectOutputStream,
+                RandomAccessFile}
 import java.net.Socket
 import java.security.MessageDigest
 import java.util.regex.Pattern
@@ -291,6 +292,17 @@ object Utils {
     sock.getInetAddress.getHostName + ":" + sock.getPort
 
 
+  // read a chunk of data from a file
+  def readChunk (home: File, subpath: FSPath) (position: Int, chunkSize: Int) : FileBytes = {
+    val file = new RandomAccessFile(Utils.newFile(home, subpath), "r")
+    val bytes = new Array[Byte](chunkSize)
+    file.seek(position * chunkSize)
+    file.read(bytes)
+    file.close
+    bytes
+  }
+
+
   def readFile (home: File, subpath: FSPath) : FileBytes =
     readFile(home, joinPath(subpath))
 
@@ -315,13 +327,22 @@ object Utils {
 
 
   // check whether or not two hashes match
-  def verifyHash (hash1: Array[FileHash])(hash2: Array[FileHash]) : Boolean =
+  def verifyHash (hash1: Array[FileHash]) (hash2: Array[FileHash]) : Boolean =
     hash1.length == hash2.length && hash1.indices.forall(i => verifyChunkHash(hash1(i))(hash2(i)))
 
 
   // check whether or not two hash chunks match
-  def verifyChunkHash (hash1: FileHash)(hash2: FileHash) : Boolean =
+  def verifyChunkHash (hash1: FileHash) (hash2: FileHash) : Boolean =
     hash1.length == hash2.length && hash1.zip(hash2).forall(hs => hs._1 == hs._2)
+
+
+  // write a chunk of data, represented by an FTFile
+  def writeChunk (home: File, ftFile: FTFile) : Unit = {
+    val file = new RandomAccessFile(Utils.newFile(home, ftFile.file), "rw")
+    file.seek(ftFile.position * ftFile.contents.length)
+    file.write(ftFile.contents)
+    file.close
+  }
 
 
   // write data to a file

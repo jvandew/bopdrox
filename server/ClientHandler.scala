@@ -116,11 +116,10 @@ class ClientHandler (server: Server) (private var client: Socket) (debug: Boolea
               else {
                 val fsConflictDir = conflictDir(dir)
                 val fsOrigFile = FSFile(dir.path)
-                val contents = Utils.readFile(home, dir.path)
 
                 TransConflict(
                   RejDirFile(dir, fsOrigFile, fData.hash),
-                  Some(FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))),
+                  Some(FTFile(fsOrigFile, null, fData.hash, Some(FLDirectory(dir)))),
                   FTDirectory(fsConflictDir, None)
                 )
               }
@@ -138,11 +137,10 @@ class ClientHandler (server: Server) (private var client: Socket) (debug: Boolea
 
               val fsConflictDir = conflictDir(dir)
               val fsOrigFile = FSFile(dir.path)
-              val contents = Utils.readFile(home, dir.path)
 
               TransConflict(
                 RejDirFile(dir, fsOrigFile, fData.hash),
-                Some(FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))),
+                Some(FTFile(fsOrigFile, null, fData.hash, Some(FLDirectory(dir)))),
                 FTDirectory(fsConflictDir, None)
               )
             }
@@ -154,11 +152,10 @@ class ClientHandler (server: Server) (private var client: Socket) (debug: Boolea
 
               val fsConflictDir = conflictDir(dir)
               val fsOrigFile = FSFile(dir.path)
-              val contents = Utils.readFile(home, dir.path)
 
               TransConflict(
                 RejDirFile(dir, fsOrigFile, fData.hash),
-                Some(FTFile(fsOrigFile, contents, fData.hash, Some(FLDirectory(dir)))),
+                Some(FTFile(fsOrigFile, null, fData.hash, Some(FLDirectory(dir)))),
                 FTDirectory(fsConflictDir, None)
               )
             }
@@ -167,15 +164,13 @@ class ClientHandler (server: Server) (private var client: Socket) (debug: Boolea
 
         }
 
-        case FTFile(fsFile, contents, hash, oldFSObj) => server.hashes.synchronized {
+        case ftFile @ FTFile(fsFile, contents, position, hash, oldFSObj) => server.hashes.synchronized {
           (server.hashes.lookupPath(fsFile.path), oldFSObj) match {
 
             case (None, None) => {
 
               Utils.ensureDir(home, fsFile.path)
-              val file = Utils.newFile(home, fsFile)
-
-              Utils.writeFile(file)(contents)
+              Utils.writeChunk(home, ftFile)
               server.hashes(fsFile) = FileData(file.lastModified, hash, Nil)
 
               TransSuccess(ftData)
